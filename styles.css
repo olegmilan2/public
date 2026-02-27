@@ -66,14 +66,14 @@ h1 {
 #app {
   display: grid;
   grid-template-columns: repeat(12, minmax(0, 1fr));
-  gap: 16px;
+  gap: 12px;
   align-items: start;
 }
 
 .section {
   grid-column: span 6;
-  padding: 18px;
-  border-radius: 18px;
+  padding: 14px;
+  border-radius: 14px;
   border: 1px solid var(--border);
   background: color-mix(in srgb, var(--surface) 88%, #eef4ff 12%);
   backdrop-filter: blur(6px);
@@ -82,14 +82,14 @@ h1 {
 }
 
 .section-title {
-  margin: 0 0 12px;
-  font: 700 20px/1.2 "Space Grotesk", sans-serif;
+  margin: 0 0 8px;
+  font: 700 18px/1.2 "Space Grotesk", sans-serif;
 }
 
 .item {
-  margin: 9px 0;
-  padding: 12px;
-  border-radius: 14px;
+  margin: 7px 0;
+  padding: 9px;
+  border-radius: 11px;
   border: 1px solid #d8e4f3;
   background: var(--surface-soft);
   transition: transform 0.2s ease, box-shadow 0.2s ease;
@@ -114,7 +114,7 @@ h1 {
   display: grid;
   grid-template-columns: minmax(120px, 2fr) auto auto auto;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
 }
 
 .name {
@@ -123,28 +123,28 @@ h1 {
 }
 
 .type {
-  font-size: 12px;
+  font-size: 11px;
   color: var(--muted);
   font-weight: 600;
 }
 
 .qty {
-  width: 86px;
+  width: 72px;
 }
 
 .row {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 8px;
-  margin-top: 9px;
+  gap: 6px;
+  margin-top: 6px;
 }
 
 button {
-  padding: 9px 10px;
+  padding: 7px 8px;
   border: none;
   border-radius: 10px;
   color: #fff;
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 600;
   cursor: pointer;
   transition: transform 0.16s ease, opacity 0.16s ease, background-color 0.18s ease;
@@ -165,13 +165,13 @@ button:active {
 .btn-ok:hover { background: var(--success-hover); }
 
 .btn-delete {
-  min-width: 42px;
+  min-width: 36px;
   background: var(--neutral);
 }
 .btn-delete:hover { background: var(--neutral-hover); }
 
 .btn-add {
-  margin-top: 10px;
+  margin-top: 8px;
   width: 100%;
   background: linear-gradient(130deg, var(--primary) 0%, #49a0ff 100%);
 }
@@ -180,27 +180,27 @@ button:active {
 }
 
 .add-form {
-  margin-top: 12px;
-  padding: 12px;
-  border-radius: 14px;
+  margin-top: 8px;
+  padding: 9px;
+  border-radius: 10px;
   border: 1px solid #d6e0ef;
   background: #fbfdff;
 }
 
 .form-grid {
   display: grid;
-  gap: 8px;
+  gap: 6px;
 }
 
 input,
 select {
   width: 100%;
-  padding: 10px 11px;
-  border-radius: 10px;
+  padding: 7px 9px;
+  border-radius: 8px;
   border: 1px solid #c9d5e7;
   background: #fff;
   color: var(--text);
-  font-size: 14px;
+  font-size: 13px;
   outline: none;
   transition: border-color 0.18s ease, box-shadow 0.18s ease;
 }
@@ -240,8 +240,8 @@ select:focus {
   }
 
   .section {
-    padding: 14px;
-    border-radius: 14px;
+    padding: 10px;
+    border-radius: 10px;
   }
 
   .line {
