@@ -88,7 +88,7 @@ const app=document.getElementById("app");
 sections.forEach(sec=>{
   const box=document.createElement("div");
   box.className="section";
-  box.innerHTML=`<h2 class="section-title">${sec.name}</h2><div id="${sec.key}-box"></div>`;
+  box.innerHTML=`<h2 class="section-title">${sec.name}</h2><div id="${sec.key}-box" class="items-box"></div>`;
   app.appendChild(box);
 
   const addForm=document.createElement("div");
