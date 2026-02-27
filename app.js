@@ -20,6 +20,12 @@ const sections=[
   {name:"🔥 Мангал", key:"grill"}
 ];
 
+const defaultItems = {
+  pizza: {
+    mangal: { name: "Пицца Мангал", qty: 0, status: "ok", type: "unit" }
+  }
+};
+
 // ===== Рендер =====
 function renderSection(secKey, data){
   const box=document.getElementById(secKey+"-box");
@@ -55,6 +61,10 @@ function renderSection(secKey, data){
 function loadData(secKey){
   db.ref(secKey).on('value', snapshot => {
     const data = snapshot.val() || {};
+    if (Object.keys(data).length === 0 && defaultItems[secKey]) {
+      db.ref(secKey).update(defaultItems[secKey]);
+      return;
+    }
     renderSection(secKey, data);
   });
 }
