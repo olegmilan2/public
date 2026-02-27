@@ -1,0 +1,142 @@
+:root{
+  --bg: #f4f7fb;
+  --surface: #ffffff;
+  --surface-soft: #f7f9fc;
+  --text: #1f2937;
+  --muted: #64748b;
+  --border: #e2e8f0;
+  --ok-bg: #e9f8ee;
+  --ok-border: #8fd3a1;
+  --out-bg: #fdecec;
+  --out-border: #f0aaaa;
+  --danger: #d64545;
+  --danger-hover: #be3b3b;
+  --success: #2f9d57;
+  --success-hover: #268349;
+  --primary: #2f7edb;
+  --primary-hover: #266cc0;
+  --neutral: #6b7280;
+  --neutral-hover: #4b5563;
+}
+
+body{
+  font-family: "Segoe UI", Arial, sans-serif;
+  background: linear-gradient(180deg, #f7f9fc 0%, var(--bg) 100%);
+  color: var(--text);
+  margin: 0;
+  padding: 10px;
+}
+
+h1{
+  text-align: center;
+  color: #0f172a;
+}
+
+#app{
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  align-items: start;
+}
+
+.section{
+  background: var(--surface);
+  margin: 0;
+  padding: 15px;
+  border-radius: 14px;
+  border: 1px solid var(--border);
+  box-shadow: 0 6px 18px rgba(15, 23, 42, 0.05);
+}
+
+.item{
+  background: var(--surface-soft);
+  margin: 8px 0;
+  padding: 10px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+}
+
+.item.out{
+  background: var(--out-bg);
+  border-color: var(--out-border);
+}
+
+.item.ok{
+  background: var(--ok-bg);
+  border-color: var(--ok-border);
+}
+
+.line{
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.name{
+  flex: 2;
+  font-weight: 600;
+}
+
+.type{
+  font-size: 12px;
+  color: var(--muted);
+  flex: 1;
+}
+
+.qty{
+  width: 70px;
+}
+
+.row{
+  display: flex;
+  gap: 5px;
+  margin-top: 8px;
+}
+
+button{
+  padding: 8px;
+  border: none;
+  border-radius: 8px;
+  color: #fff;
+  cursor: pointer;
+  transition: background-color 0.18s ease;
+}
+
+.btn-out{ background: var(--danger); }
+.btn-out:hover{ background: var(--danger-hover); }
+
+.btn-ok{ background: var(--success); }
+.btn-ok:hover{ background: var(--success-hover); }
+
+.btn-delete{ background: var(--neutral); }
+.btn-delete:hover{ background: var(--neutral-hover); }
+
+.btn-add{
+  background: var(--primary);
+  width: 100%;
+  margin-top: 10px;
+}
+.btn-add:hover{ background: var(--primary-hover); }
+
+.add-form{
+  margin-top: 10px;
+  background: #f8fafc;
+  padding: 10px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+}
+
+input,select{
+  padding: 8px;
+  font-size: 15px;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  background: #fff;
+  color: var(--text);
+}
+
+@media (max-width: 900px){
+  #app{
+    grid-template-columns: 1fr;
+  }
+}
