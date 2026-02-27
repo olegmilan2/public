@@ -4,143 +4,16 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Наличие кухни и бара — общий доступ</title>
-<style>
-body{ font-family:Arial; background:#f4f6f8; margin:0; padding:10px;}
-h1{text-align:center;}
-.section{ background:white; margin:15px 0; padding:15px; border-radius:12px;}
-.item{ background:#eef2f6; margin:8px 0; padding:10px; border-radius:10px;}
-.item.out{ background:#ffb3b3; }
-.item.ok{ background:#b9f6c7; }
-.line{ display:flex; align-items:center; gap:8px;}
-.name{ flex:2; font-weight:bold;}
-.type{ font-size:12px; opacity:0.7; flex:1;}
-.qty{ width:70px;}
-.row{ display:flex; gap:5px; margin-top:8px;}
-button{ padding:8px; border:none; border-radius:8px; color:white; cursor:pointer;}
-.btn-out{ background:#e53935; }
-.btn-ok{ background:#43a047; }
-.btn-delete{ background:#555; }
-.btn-add{ background:#2196f3; width:100%; margin-top:10px;}
-.add-form{ margin-top:10px; background:#f1f3f6; padding:10px; border-radius:10px;}
-input,select{ padding:8px; font-size:15px;}
-</style>
+<link rel="stylesheet" href="styles.css">
 
 <!-- Firebase -->
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+<script src="app.js" defer></script>
 
 </head>
 <body>
 <h1>📋 Наличие кухни и бара — общий доступ</h1>
 <div id="app"></div>
-
-<script>
-// ===== Firebase конфиг =====
-const firebaseConfig = {
-  apiKey: "AIzaSyA8VJCylVRlIXgMKZlHWe8pAmu9ZslEPmk",
-  authDomain: "check-c1174.firebaseapp.com",
-  projectId: "check-c1174",
-  storageBucket: "check-c1174.firebasestorage.app",
-  messagingSenderId: "620822198863",
-  appId: "1:620822198863:web:ab8954aa72bd6cafc1483a",
-  measurementId: "G-QWRB5L1N94",
-  databaseURL: "https://check-c1174-default-rtdb.firebaseio.com/"
-};
-firebase.initializeApp(firebaseConfig);
-const db = firebase.database();
-
-// ===== Секции =====
-const sections=[
-  {name:"🍳 Кухня", key:"kitchen"},
-  {name:"🍹 Бар", key:"bar"}
-];
-
-// ===== Рендер =====
-function renderSection(secKey, data){
-  const box=document.getElementById(secKey+"-box");
-  if(!box) return;
-  box.innerHTML="";
-  for(const id in data){
-    const item = data[id];
-    const div=document.createElement("div");
-    div.className="item";
-    if(item.status==="out") div.classList.add("out");
-    if(item.status==="ok") div.classList.add("ok");
-
-    const typeLabel = secKey==="bar" ? (item.type==="portion"?"🥃 Порционно":"🧴 Бутылки") : "";
-    const step=item.type==="portion"?"0.01":"1";
-
-    div.innerHTML=`
-      <div class="line">
-        <div class="name">${item.name}</div>
-        <div class="type">${typeLabel}</div>
-        <input class="qty" type="number" step="${step}" value="${item.qty}" onchange="changeQty('${secKey}','${id}',this.value)">
-        <button class="btn-delete" onclick="deleteItem('${secKey}','${id}')">🗑</button>
-      </div>
-      <div class="row">
-        <button class="btn-out" onclick="setStatus('${secKey}','${id}','out')">Нет</button>
-        <button class="btn-ok" onclick="setStatus('${secKey}','${id}','ok')">Есть</button>
-      </div>
-    `;
-    box.appendChild(div);
-  }
-}
-
-// ===== Загрузка данных =====
-function loadData(secKey){
-  db.ref(secKey).on('value', snapshot => {
-    const data = snapshot.val() || {};
-    renderSection(secKey, data);
-  });
-}
-
-// ===== Изменения =====
-function changeQty(secKey,id,value){
-  db.ref(`${secKey}/${id}/qty`).set(value);
-}
-function setStatus(secKey,id,status){
-  db.ref(`${secKey}/${id}/status`).set(status);
-}
-function deleteItem(secKey,id){
-  if(!confirm("Удалить позицию?")) return;
-  db.ref(`${secKey}/${id}`).remove();
-}
-
-// ===== Добавление =====
-function addItem(secKey){
-  const nameEl = document.getElementById(secKey+"-name");
-  const name = nameEl.value.trim();
-  if(!name) return;
-  let type = "unit";
-  if(secKey==="bar") type = document.getElementById(secKey+"-type").value;
-
-  db.ref(secKey).push({name:name, qty:0, status:"ok", type:type});
-  nameEl.value="";
-}
-
-// ===== Инициализация UI =====
-const app=document.getElementById("app");
-sections.forEach(sec=>{
-  const box=document.createElement("div");
-  box.className="section";
-  box.innerHTML=`<h2>${sec.name}</h2><div id="${sec.key}-box"></div>`;
-  app.appendChild(box);
-
-  const addForm=document.createElement("div");
-  addForm.className="add-form";
-  addForm.innerHTML=`
-    <input id="${sec.key}-name" placeholder="Название">
-    ${sec.key==="bar"?`
-    <select id="${sec.key}-type">
-      <option value="bottle">🧴 Бутылки</option>
-      <option value="portion">🥃 Порционно</option>
-    </select>` : ""}
-    <button class="btn-add" onclick="addItem('${sec.key}')">➕ Добавить</button>
-  `;
-  box.appendChild(addForm);
-
-  loadData(sec.key);
-});
-</script>
 </body>
 </html>
