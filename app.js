@@ -15,7 +15,8 @@ const db = firebase.database();
 // ===== Секции =====
 const sections=[
   {name:"🍳 Кухня", key:"kitchen"},
-  {name:"🍹 Бар", key:"bar"}
+  {name:"🍹 Бар", key:"bar"},
+  {name:"💨 Кальянная", key:"hookah"}
 ];
 
 // ===== Рендер =====
@@ -86,19 +87,21 @@ const app=document.getElementById("app");
 sections.forEach(sec=>{
   const box=document.createElement("div");
   box.className="section";
-  box.innerHTML=`<h2>${sec.name}</h2><div id="${sec.key}-box"></div>`;
+  box.innerHTML=`<h2 class="section-title">${sec.name}</h2><div id="${sec.key}-box"></div>`;
   app.appendChild(box);
 
   const addForm=document.createElement("div");
   addForm.className="add-form";
   addForm.innerHTML=`
-    <input id="${sec.key}-name" placeholder="Название">
-    ${sec.key==="bar"?`
-    <select id="${sec.key}-type">
-      <option value="bottle">🧴 Бутылки</option>
-      <option value="portion">🥃 Порционно</option>
-    </select>` : ""}
-    <button class="btn-add" onclick="addItem('${sec.key}')">➕ Добавить</button>
+    <div class="form-grid">
+      <input id="${sec.key}-name" placeholder="Название позиции">
+      ${sec.key==="bar"?`
+      <select id="${sec.key}-type">
+        <option value="bottle">🧴 Бутылки</option>
+        <option value="portion">🥃 Порционно</option>
+      </select>` : ""}
+    </div>
+    <button class="btn-add" onclick="addItem('${sec.key}')">Добавить позицию</button>
   `;
   box.appendChild(addForm);
 
