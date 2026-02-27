@@ -15,8 +15,7 @@ const db = firebase.database();
 // ===== Секции =====
 const sections=[
   {name:"🍳 Кухня", key:"kitchen"},
-  {name:"🍹 Бар", key:"bar"},
-  {name:"💨 Кальянная", key:"hookah"}
+  {name:"🍹 Бар", key:"bar"}
 ];
 
 // ===== Рендер =====
