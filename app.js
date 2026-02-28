@@ -796,80 +796,6 @@ function initChat(){
   listEl.addEventListener("pointercancel", clearPress, { passive: true });
 }
 
-function initPullToRefresh(){
-  const THRESHOLD = 110; // px
-  let startX = 0;
-  let startY = 0;
-  let active = false;
-  let pulling = false;
-  let lastPull = 0;
-
-  function getActiveScroller(){
-    const chatView = document.getElementById("view-chat");
-    if(chatView && !chatView.hidden){
-      return document.getElementById("chat-messages");
-    }
-    return document.getElementById("view-stoplist");
-  }
-
-  function isInteractiveTarget(target){
-    return !!(target && target.closest && target.closest("input, textarea, select, button"));
-  }
-
-  function reset(){
-    active = false;
-    pulling = false;
-    lastPull = 0;
-  }
-
-  document.addEventListener("touchstart", (e) => {
-    const t = e.touches && e.touches[0];
-    if(!t) return;
-    if(isInteractiveTarget(e.target)) return;
-
-    const scroller = getActiveScroller();
-    if(!scroller) return;
-    if(scroller.scrollTop > 0) return;
-
-    startX = t.clientX;
-    startY = t.clientY;
-    active = true;
-    pulling = false;
-  }, { passive: true });
-
-  document.addEventListener("touchmove", (e) => {
-    if(!active) return;
-    const t = e.touches && e.touches[0];
-    if(!t) return;
-
-    const dx = t.clientX - startX;
-    const dy = t.clientY - startY;
-    if(dy <= 0) return;
-
-    // If horizontal movement dominates, don't treat it as pull-to-refresh.
-    if(Math.abs(dx) > Math.abs(dy) * 0.7){
-      active = false;
-      return;
-    }
-
-    pulling = true;
-    lastPull = dy;
-
-    // Avoid browser-native pull-to-refresh when we handle it.
-    e.preventDefault();
-  }, { passive: false });
-
-  document.addEventListener("touchend", () => {
-    if(!active && !pulling) return;
-    const shouldReload = lastPull >= THRESHOLD;
-    reset();
-    if(shouldReload){
-      try { window.location.reload(); } catch (e) { /* ignore */ }
-    }
-  }, { passive: true });
-
-  document.addEventListener("touchcancel", reset, { passive: true });
-}
 
 function ratingItemKey(name){
   return encodeDbKey(normalizeItemName(name));
@@ -1399,7 +1325,6 @@ initAndroidInstallPrompt();
 updateDeviceInfo();
 initViewTabs();
 initChat();
-initPullToRefresh();
 initNewItemNotifications();
 initDangerActions();
 initRating();
