@@ -20,8 +20,18 @@ const sections=[
 
 const defaultItems = {};
 const USER_NAME_KEY = "stoplist_user_name";
-const IOS_INSTALL_DISMISSED_KEY = "ios_install_prompt_dismissed";
+const IOS_INSTALL_DISMISSED_KEY = "iphone_install_prompt_dismissed";
+const ANDROID_INSTALL_DISMISSED_KEY = "android_install_prompt_dismissed";
 let currentUser = requestUserNameOnStart();
+let deferredInstallPrompt = null;
+
+if("serviceWorker" in navigator){
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("/sw.js").catch(() => {
+      // ignore service worker registration errors
+    });
+  });
+}
 
 function storageGet(key){
   try {
@@ -57,6 +67,11 @@ function isIphone(){
   return /iPhone/i.test(navigator.userAgent || "");
 }
 
+function isAndroidChrome(){
+  const ua = navigator.userAgent || "";
+  return /Android/i.test(ua) && /Chrome\//i.test(ua) && !/EdgA|OPR|SamsungBrowser|UCBrowser|YaBrowser/i.test(ua);
+}
+
 function openCurrentInSafari(){
   const href = window.location.href;
   if(!/^https?:\/\//i.test(href)) return;
@@ -64,13 +79,31 @@ function openCurrentInSafari(){
   window.location.href = safariSchemeUrl;
 }
 
+async function installViaChrome(){
+  if(!deferredInstallPrompt) return;
+  deferredInstallPrompt.prompt();
+  const choice = await deferredInstallPrompt.userChoice;
+  deferredInstallPrompt = null;
+  if(choice && choice.outcome === "accepted"){
+    storageSet(ANDROID_INSTALL_DISMISSED_KEY, "1");
+    const promptEl = document.getElementById("android-install-prompt");
+    if(promptEl) promptEl.classList.remove("show");
+  }
+}
+
 function isStandaloneMode(){
   return window.matchMedia("(display-mode: standalone)").matches || window.navigator.standalone === true;
 }
 
-function initIosInstallPrompt(){
-  const promptEl = document.getElementById("ios-install-prompt");
-  const closeEl = document.getElementById("ios-install-close");
+function showInstallPrompt(promptEl){
+  setTimeout(() => {
+    promptEl.classList.add("show");
+  }, 800);
+}
+
+function initIphoneInstallPrompt(){
+  const promptEl = document.getElementById("iphone-install-prompt");
+  const closeEl = document.getElementById("iphone-install-close");
   const openSafariEl = document.getElementById("open-in-safari");
   const actionsEl = promptEl ? promptEl.querySelector(".ios-install-actions") : null;
   const stepsEl = promptEl ? promptEl.querySelector(".ios-install-steps") : null;
@@ -83,9 +116,11 @@ function initIosInstallPrompt(){
 
   if(safari){
     actionsEl.classList.add("hide");
+    openSafariEl.classList.add("hide");
     stepsEl.textContent = "Tap Share → Add to Home Screen";
   } else {
     actionsEl.classList.remove("hide");
+    openSafariEl.classList.remove("hide");
     stepsEl.textContent = "Open via Safari, then Tap Share → Add to Home Screen";
   }
 
@@ -95,10 +130,27 @@ function initIosInstallPrompt(){
   });
 
   openSafariEl.addEventListener("click", openCurrentInSafari);
+  showInstallPrompt(promptEl);
+}
 
-  setTimeout(() => {
-    promptEl.classList.add("show");
-  }, 800);
+function initAndroidInstallPrompt(){
+  const promptEl = document.getElementById("android-install-prompt");
+  const closeEl = document.getElementById("android-install-close");
+  const installChromeEl = document.getElementById("install-in-chrome");
+  if(!promptEl || !closeEl || !installChromeEl) return;
+
+  const dismissed = storageGet(ANDROID_INSTALL_DISMISSED_KEY) === "1";
+  if(!isAndroidChrome() || isStandaloneMode() || dismissed) return;
+
+  installChromeEl.disabled = !deferredInstallPrompt;
+
+  closeEl.addEventListener("click", () => {
+    storageSet(ANDROID_INSTALL_DISMISSED_KEY, "1");
+    promptEl.classList.remove("show");
+  });
+
+  installChromeEl.addEventListener("click", installViaChrome);
+  showInstallPrompt(promptEl);
 }
 
 function actorMeta(){
@@ -370,4 +422,19 @@ updateHeaderTime();
 setInterval(updateHeaderTime, 1000);
 updateHeaderWeather();
 setInterval(updateHeaderWeather, 600000);
-initIosInstallPrompt();
+
+window.addEventListener("beforeinstallprompt", event => {
+  event.preventDefault();
+  deferredInstallPrompt = event;
+  const installBtn = document.getElementById("install-in-chrome");
+  if(installBtn) installBtn.disabled = false;
+});
+
+window.addEventListener("appinstalled", () => {
+  storageSet(ANDROID_INSTALL_DISMISSED_KEY, "1");
+  const promptEl = document.getElementById("android-install-prompt");
+  if(promptEl) promptEl.classList.remove("show");
+});
+
+initIphoneInstallPrompt();
+initAndroidInstallPrompt();
