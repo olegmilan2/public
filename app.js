@@ -543,8 +543,20 @@ function setActiveView(view){
   const isChat = next === "chat";
   stoplistTab.setAttribute("aria-selected", isChat ? "false" : "true");
   chatTab.setAttribute("aria-selected", isChat ? "true" : "false");
-  stoplistView.hidden = isChat;
-  chatView.hidden = !isChat;
+  const showEl = isChat ? chatView : stoplistView;
+  const hideEl = isChat ? stoplistView : chatView;
+
+  // Animate panel switch without reflow-jank: fade/slide out then hide.
+  hideEl.classList.add("is-hiding");
+  showEl.hidden = false;
+  showEl.classList.remove("is-hiding");
+  requestAnimationFrame(() => showEl.classList.remove("is-hidden"));
+
+  setTimeout(() => {
+    hideEl.hidden = true;
+    hideEl.classList.add("is-hidden");
+    hideEl.classList.remove("is-hiding");
+  }, 180);
 
   if(isChat){
     // Ensure the latest message is visible when entering chat.
@@ -560,6 +572,11 @@ function initViewTabs(){
   if(chatTab) chatTab.addEventListener("click", () => setActiveView("chat"));
 
   const saved = (storageGet(ACTIVE_VIEW_KEY) || "").trim();
+  // Ensure initial states for animation classes.
+  const stoplistView = document.getElementById("view-stoplist");
+  const chatView = document.getElementById("view-chat");
+  if(stoplistView) stoplistView.classList.remove("is-hidden");
+  if(chatView) chatView.classList.add("is-hidden");
   setActiveView(saved === "chat" ? "chat" : "stoplist");
 }
 
@@ -704,6 +721,11 @@ function initChat(){
     const btn = e.target && e.target.closest ? e.target.closest(".chat-like-btn") : null;
     if(!btn) return;
     e.preventDefault();
+    btn.classList.remove("pulse");
+    // Force restart animation on rapid taps.
+    void btn.offsetWidth;
+    btn.classList.add("pulse");
+    setTimeout(() => btn.classList.remove("pulse"), 260);
     toggleLike(btn.dataset.id);
   });
 

@@ -355,12 +355,19 @@ h1 {
   min-height: 0;
 }
 
-#view-stoplist {
-  overflow: visible;
+.view {
+  opacity: 1;
+  transform: translateY(0);
+  transition: opacity 0.18s ease, transform 0.2s ease;
 }
 
-#view-chat {
-  overflow: hidden;
+.view.is-hidden {
+  opacity: 0;
+  transform: translateY(6px);
+}
+
+.view.is-hiding {
+  pointer-events: none;
 }
 
 .header-actions {
@@ -1547,6 +1554,25 @@ select:focus {
 
 .chat-like-btn.liked .chat-like-ico path {
   fill: currentColor;
+}
+
+@keyframes like-pop {
+  0% { transform: scale(1); }
+  45% { transform: scale(1.12); }
+  100% { transform: scale(1); }
+}
+
+.chat-like-btn.pulse {
+  animation: like-pop 0.26s ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .view {
+    transition: none;
+  }
+  .chat-like-btn.pulse {
+    animation: none;
+  }
 }
 
 .chat-msg.mine .chat-like-btn {
