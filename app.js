@@ -20,15 +20,85 @@ const sections=[
 
 const defaultItems = {};
 const USER_NAME_KEY = "stoplist_user_name";
+const IOS_INSTALL_DISMISSED_KEY = "ios_install_prompt_dismissed";
 let currentUser = requestUserNameOnStart();
 
+function storageGet(key){
+  try {
+    return localStorage.getItem(key);
+  } catch (e) {
+    return null;
+  }
+}
+
+function storageSet(key, value){
+  try {
+    localStorage.setItem(key, value);
+  } catch (e) {
+    // ignore storage errors in private mode
+  }
+}
+
 function requestUserNameOnStart(){
-  const savedName = (localStorage.getItem(USER_NAME_KEY) || "").trim();
+  const savedName = (storageGet(USER_NAME_KEY) || "").trim();
   if(savedName) return savedName;
   const entered = prompt("Введите ваше имя:");
   const name = (entered || "Без имени").trim() || "Без имени";
-  localStorage.setItem(USER_NAME_KEY, name);
+  storageSet(USER_NAME_KEY, name);
   return name;
+}
+
+function isIphoneSafari(){
+  const ua = navigator.userAgent || "";
+  return /iPhone/i.test(ua) && /Safari/i.test(ua) && !/CriOS|FxiOS|EdgiOS|OPiOS/i.test(ua);
+}
+
+function isIphone(){
+  return /iPhone/i.test(navigator.userAgent || "");
+}
+
+function openCurrentInSafari(){
+  const href = window.location.href;
+  if(!/^https?:\/\//i.test(href)) return;
+  const safariSchemeUrl = href.replace(/^https?:\/\//i, match => `x-safari-${match}`);
+  window.location.href = safariSchemeUrl;
+}
+
+function isStandaloneMode(){
+  return window.matchMedia("(display-mode: standalone)").matches || window.navigator.standalone === true;
+}
+
+function initIosInstallPrompt(){
+  const promptEl = document.getElementById("ios-install-prompt");
+  const closeEl = document.getElementById("ios-install-close");
+  const openSafariEl = document.getElementById("open-in-safari");
+  const actionsEl = promptEl ? promptEl.querySelector(".ios-install-actions") : null;
+  const stepsEl = promptEl ? promptEl.querySelector(".ios-install-steps") : null;
+  if(!promptEl || !closeEl || !stepsEl || !actionsEl || !openSafariEl) return;
+
+  const dismissed = storageGet(IOS_INSTALL_DISMISSED_KEY) === "1";
+  const iphone = isIphone();
+  const safari = isIphoneSafari();
+  if(!iphone || isStandaloneMode() || dismissed) return;
+
+  if(safari){
+    actionsEl.classList.add("hide");
+    stepsEl.textContent = "Tap Share → Add to Home Screen";
+  } else {
+    actionsEl.classList.remove("hide");
+    stepsEl.textContent = "Open via Safari, then Tap Share → Add to Home Screen";
+  }
+
+  closeEl.addEventListener("click", () => {
+    storageSet(IOS_INSTALL_DISMISSED_KEY, "1");
+    promptEl.classList.remove("show");
+  });
+
+  openSafariEl.addEventListener("click", openCurrentInSafari);
+
+  setTimeout(() => {
+    promptEl.classList.add("show");
+  }, 800);
 }
 
 function actorMeta(){
@@ -300,3 +370,4 @@ updateHeaderTime();
 setInterval(updateHeaderTime, 1000);
 updateHeaderWeather();
 setInterval(updateHeaderWeather, 600000);
+initIosInstallPrompt();
