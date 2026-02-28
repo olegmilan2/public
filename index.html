@@ -49,7 +49,12 @@
       <button id="tab-chat" class="header-tab" type="button" role="tab" aria-selected="false" aria-controls="view-chat">Чат</button>
     </nav>
     <div class="header-actions">
-      <button id="clear-stop-list" class="clear-stop-list-btn" type="button">Удалить стоп лист</button>
+      <button id="open-settings" class="settings-btn" type="button" aria-label="Настройки">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <path d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z" stroke="currentColor" stroke-width="2"/>
+          <path d="M19.4 15a8.9 8.9 0 0 0 .1-1 8.9 8.9 0 0 0-.1-1l2-1.6-2-3.4-2.4 1a8.3 8.3 0 0 0-1.7-1L15 2H9l-.3 2.9a8.3 8.3 0 0 0-1.7 1l-2.4-1-2 3.4 2 1.6a8.9 8.9 0 0 0-.1 1c0 .3 0 .7.1 1l-2 1.6 2 3.4 2.4-1a8.3 8.3 0 0 0 1.7 1L9 22h6l.3-2.9a8.3 8.3 0 0 0 1.7-1l2.4 1 2-3.4-2-1.6Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+        </svg>
+      </button>
     </div>
     <button id="theme-toggle" class="theme-toggle" type="button" role="switch" aria-checked="false" aria-label="Светлая тема">
       <span class="theme-toggle-track" aria-hidden="true">
@@ -153,6 +158,21 @@
       </section>
     </main>
   </div>
+</div>
+
+<div id="settings-overlay" class="sheet-overlay" hidden aria-hidden="true">
+  <div class="sheet-backdrop" data-sheet-close="1" aria-hidden="true"></div>
+  <aside class="sheet" role="dialog" aria-label="Настройки">
+    <div class="sheet-handle" aria-hidden="true"></div>
+    <div class="sheet-head">
+      <div class="sheet-title">Настройки</div>
+      <button id="settings-close" class="sheet-close" type="button" aria-label="Закрыть">×</button>
+    </div>
+    <div class="sheet-body">
+      <button id="clear-stop-list" class="sheet-danger" type="button">Удалить стоп лист</button>
+      <div class="sheet-hint">Потребуются пароль и подтверждение.</div>
+    </div>
+  </aside>
 </div>
 <aside id="iphone-install-prompt" class="ios-install-prompt" aria-live="polite" aria-label="Install app prompt for iPhone">
   <button id="iphone-install-close" class="ios-install-close" type="button" aria-label="Close iPhone install prompt">×</button>

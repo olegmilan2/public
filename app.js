@@ -403,6 +403,52 @@ function initAndroidInstallPrompt(){
   showInstallPrompt(promptEl);
 }
 
+function initSettingsSheet(){
+  const openBtn = document.getElementById("open-settings");
+  const overlay = document.getElementById("settings-overlay");
+  const closeBtn = document.getElementById("settings-close");
+  if(!openBtn || !overlay || !closeBtn) return;
+
+  function open(e){
+    if(e){
+      e.preventDefault();
+      e.stopPropagation();
+    }
+    overlay.hidden = false;
+    overlay.style.display = "grid";
+    overlay.setAttribute("aria-hidden", "false");
+    document.body.classList.add("modal-open");
+    // Force layout so the transition always runs on iOS Safari.
+    void overlay.offsetHeight;
+    overlay.classList.add("show");
+  }
+
+  function close(e){
+    if(e){
+      e.preventDefault();
+      e.stopPropagation();
+    }
+    overlay.classList.remove("show");
+    overlay.setAttribute("aria-hidden", "true");
+    document.body.classList.remove("modal-open");
+    setTimeout(() => {
+      overlay.hidden = true;
+      overlay.style.display = "";
+    }, 240);
+  }
+
+  openBtn.addEventListener("click", open);
+  openBtn.addEventListener("pointerdown", open, { passive: false });
+  closeBtn.addEventListener("click", close);
+  closeBtn.addEventListener("pointerdown", close, { passive: false });
+  overlay.addEventListener("click", (e) => {
+    if(e.target && e.target.dataset && e.target.dataset.sheetClose === "1") close();
+  });
+  window.addEventListener("keydown", (e) => {
+    if(e.key === "Escape" && !overlay.hidden) close();
+  });
+}
+
 function actorMeta(){
   return {
     updatedBy: currentUser,
@@ -931,12 +977,11 @@ function renderRatingList(items){
     const safeMeta = escapeHtml(meta);
 
     return `
-      <div class="rating-row">
+      <div class="rating-row" title="${safeMeta}">
         <div class="rating-left">
           <div class="rating-rank">#${index + 1}</div>
           <div class="rating-text">
             <div class="rating-name">${safeName}</div>
-            <div class="rating-meta">${safeMeta}</div>
           </div>
         </div>
         <div class="rating-count">${count}</div>
@@ -1396,6 +1441,7 @@ initAndroidInstallPrompt();
 updateDeviceInfo();
 initViewTabs();
 initChat();
+initSettingsSheet();
 initNewItemNotifications();
 initDangerActions();
 initRating();
