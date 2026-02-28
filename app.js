@@ -14,29 +14,146 @@ const db = firebase.database();
 
 // ===== Секции =====
 const sections=[
-  {name:"🍳 Кухня", key:"kitchen"},
   {name:"🍹 Бар", key:"bar"},
-  {name:"🍕 Пицца", key:"pizza"},
-  {name:"🔥 Мангал", key:"grill"}
+  {name:"🍳 Кухня", key:"kitchen"},
 ];
 
-const defaultItems = {
-  pizza: {
-    mangal: { name: "Пицца Мангал", qty: 0, status: "ok", type: "unit" }
+const defaultItems = {};
+const USER_NAME_KEY = "stoplist_user_name";
+let currentUser = requestUserNameOnStart();
+
+function requestUserNameOnStart(){
+  const savedName = (localStorage.getItem(USER_NAME_KEY) || "").trim();
+  if(savedName) return savedName;
+  const entered = prompt("Введите ваше имя:");
+  const name = (entered || "Без имени").trim() || "Без имени";
+  localStorage.setItem(USER_NAME_KEY, name);
+  return name;
+}
+
+function actorMeta(){
+  return {
+    updatedBy: currentUser,
+    updatedAt: firebase.database.ServerValue.TIMESTAMP
+  };
+}
+
+function formatOutDuration(outSince){
+  const diffMs = Math.max(0, Date.now() - Number(outSince || 0));
+  const totalSec = Math.floor(diffMs / 1000);
+  const days = Math.floor(totalSec / 86400);
+  const hours = Math.floor((totalSec % 86400) / 3600);
+  const minutes = Math.floor((totalSec % 3600) / 60);
+  const seconds = totalSec % 60;
+  if(days > 0) return `${days}д ${hours}ч ${minutes}м`;
+  if(hours > 0) return `${hours}ч ${minutes}м ${seconds}с`;
+  return `${minutes}м ${seconds}с`;
+}
+
+function getTimerLabel(item){
+  if(item.status !== "out") return "";
+  if(!item.outSince) return "Нет: только что";
+  return `Нет: ${formatOutDuration(item.outSince)}`;
+}
+
+function formatDateTime(ts){
+  const date = new Date(Number(ts || 0));
+  if(Number.isNaN(date.getTime())) return "";
+  return date.toLocaleString("ru-RU", {
+    day: "2-digit",
+    month: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit"
+  });
+}
+
+function getStatusMetaLabel(item){
+  const who = item.statusBy || item.updatedBy;
+  if(!who) return "";
+  const when = item.statusAt || item.updatedAt;
+  const whenLabel = when ? ` • ${formatDateTime(when)}` : "";
+  return `Изменил: ${who}${whenLabel}`;
+}
+
+function updateTimers(){
+  const nodes = document.querySelectorAll(".timer[data-out-since]");
+  nodes.forEach(node => {
+    const outSince = node.dataset.outSince;
+    if(!outSince) return;
+    node.textContent = `Нет: ${formatOutDuration(outSince)}`;
+  });
+}
+
+function updateHeaderTime(){
+  const el = document.getElementById("header-time");
+  if(!el) return;
+  el.textContent = new Date().toLocaleTimeString("ru-RU", {
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit"
+  });
+}
+
+function weatherCodeToText(code){
+  if(code === 0) return "Ясно";
+  if([1,2,3].includes(code)) return "Облачно";
+  if([45,48].includes(code)) return "Туман";
+  if([51,53,55,56,57].includes(code)) return "Морось";
+  if([61,63,65,66,67,80,81,82].includes(code)) return "Дождь";
+  if([71,73,75,77,85,86].includes(code)) return "Снег";
+  if([95,96,99].includes(code)) return "Гроза";
+  return "Погода";
+}
+
+async function updateHeaderWeather(){
+  const el = document.getElementById("header-weather");
+  if(!el) return;
+  try {
+    const weatherUrl = "https://api.open-meteo.com/v1/forecast?latitude=46.4825&longitude=30.7233&current=temperature_2m,weather_code,wind_speed_10m&timezone=auto";
+    const seaUrl = "https://marine-api.open-meteo.com/v1/marine?latitude=46.4825&longitude=30.7233&current=sea_surface_temperature&timezone=auto";
+    const [weatherResponse, seaResponse] = await Promise.all([
+      fetch(weatherUrl),
+      fetch(seaUrl)
+    ]);
+    if(!weatherResponse.ok) throw new Error("weather fetch failed");
+    const data = await weatherResponse.json();
+    const seaData = seaResponse.ok ? await seaResponse.json() : {};
+    const current = data.current || {};
+    const seaCurrent = seaData.current || {};
+    const temp = Math.round(Number(current.temperature_2m || 0));
+    const wind = Math.round(Number(current.wind_speed_10m || 0));
+    const code = Number(current.weather_code);
+    const seaTempRaw = Number(seaCurrent.sea_surface_temperature);
+    const seaTemp = Number.isFinite(seaTempRaw) ? Math.round(seaTempRaw) : null;
+    const seaPart = seaTemp===null ? "" : `, вода в Черном море ${seaTemp}°C`;
+    el.textContent = `Одесса: ${temp}°C, ${weatherCodeToText(code)}, ветер ${wind} км/ч${seaPart}`;
+  } catch (e) {
+    el.textContent = "Одесса: погода/вода недоступны";
   }
-};
+}
 
 // ===== Рендер =====
 function renderSection(secKey, data){
   const box=document.getElementById(secKey+"-box");
   if(!box) return;
-  box.innerHTML="";
+  const existingNodes = new Map(
+    Array.from(box.querySelectorAll(".item[data-id]")).map(node => [node.dataset.id, node])
+  );
+  const actualIds = new Set(Object.keys(data));
   for(const id in data){
     const item = data[id];
-    const div=document.createElement("div");
-    div.className="item";
+    let div = existingNodes.get(id);
+    const isNew = !div;
+    if(!div){
+      div = document.createElement("div");
+      div.dataset.id = id;
+      div.className = "item";
+    }
     if(item.status==="out") div.classList.add("out");
     if(item.status==="ok") div.classList.add("ok");
+    if(item.status!=="out") div.classList.remove("out");
+    if(item.status!=="ok") div.classList.remove("ok");
+    div.classList.remove("item-leave");
 
     const typeLabel = secKey==="bar" ? (item.type==="portion"?"🥃 Порционно":"🧴 Бутылки") : "";
     const step=item.type==="portion"?"0.01":"1";
@@ -46,15 +163,50 @@ function renderSection(secKey, data){
         <div class="name">${item.name}</div>
         <div class="type">${typeLabel}</div>
         <input class="qty" type="number" step="${step}" value="${item.qty}" onchange="changeQty('${secKey}','${id}',this.value)">
-        <button class="btn-delete" onclick="deleteItem('${secKey}','${id}')">🗑</button>
+        <input class="status-check" type="checkbox" ${item.status==="ok"?"checked":""} onchange="toggleStatus('${secKey}','${id}',this.checked)" title="Есть в наличии">
+        <button class="btn-delete" onclick="deleteItem('${secKey}','${id}')">×</button>
       </div>
-      <div class="row">
-        <button class="btn-out" onclick="setStatus('${secKey}','${id}','out')">Нет</button>
-        <button class="btn-ok" onclick="setStatus('${secKey}','${id}','ok')">Есть</button>
-      </div>
+      <div class="timer ${item.status==="out"?"show":""}" data-out-since="${item.outSince || ""}">${getTimerLabel(item)}</div>
+      <div class="meta">${getStatusMetaLabel(item)}</div>
     `;
     box.appendChild(div);
+
+    if(isNew){
+      div.classList.add("item-enter");
+      requestAnimationFrame(() => {
+        div.classList.add("item-enter-active");
+      });
+      setTimeout(() => {
+        div.classList.remove("item-enter", "item-enter-active");
+      }, 230);
+    }
   }
+
+  existingNodes.forEach((node, id) => {
+    if(actualIds.has(id) || node.classList.contains("item-leave")) return;
+    node.classList.add("item-leave");
+    setTimeout(() => {
+      if(node.classList.contains("item-leave")) node.remove();
+    }, 230);
+  });
+}
+
+function ensureOutSince(secKey, data){
+  const updates = {};
+  let hasUpdates = false;
+  for(const id in data){
+    const item = data[id];
+    if(!item) continue;
+    if(item.status === "out" && !item.outSince){
+      updates[`${id}/outSince`] = firebase.database.ServerValue.TIMESTAMP;
+      hasUpdates = true;
+    }
+    if(item.status === "ok" && item.outSince){
+      updates[`${id}/outSince`] = null;
+      hasUpdates = true;
+    }
+  }
+  if(hasUpdates) db.ref(secKey).update(updates);
 }
 
 // ===== Загрузка данных =====
@@ -65,16 +217,29 @@ function loadData(secKey){
       db.ref(secKey).update(defaultItems[secKey]);
       return;
     }
+    ensureOutSince(secKey, data);
     renderSection(secKey, data);
   });
 }
 
 // ===== Изменения =====
 function changeQty(secKey,id,value){
-  db.ref(`${secKey}/${id}/qty`).set(value);
+  db.ref(`${secKey}/${id}`).update({
+    qty: value,
+    ...actorMeta()
+  });
 }
 function setStatus(secKey,id,status){
-  db.ref(`${secKey}/${id}/status`).set(status);
+  db.ref(`${secKey}/${id}`).update({
+    status,
+    outSince: status==="out" ? firebase.database.ServerValue.TIMESTAMP : null,
+    statusBy: currentUser,
+    statusAt: firebase.database.ServerValue.TIMESTAMP,
+    ...actorMeta()
+  });
+}
+function toggleStatus(secKey,id,isChecked){
+  setStatus(secKey,id,isChecked ? "ok" : "out");
 }
 function deleteItem(secKey,id){
   if(!confirm("Удалить позицию?")) return;
@@ -89,7 +254,18 @@ function addItem(secKey){
   let type = "unit";
   if(secKey==="bar") type = document.getElementById(secKey+"-type").value;
 
-  db.ref(secKey).push({name:name, qty:0, status:"ok", type:type});
+  db.ref(secKey).push({
+    name:name,
+    qty:0,
+    status:"out",
+    outSince: firebase.database.ServerValue.TIMESTAMP,
+    statusBy: currentUser,
+    statusAt: firebase.database.ServerValue.TIMESTAMP,
+    createdBy: currentUser,
+    createdAt: firebase.database.ServerValue.TIMESTAMP,
+    ...actorMeta(),
+    type:type
+  });
   nameEl.value="";
 }
 
@@ -97,7 +273,7 @@ function addItem(secKey){
 const app=document.getElementById("app");
 sections.forEach(sec=>{
   const box=document.createElement("div");
-  box.className="section";
+  box.className=`section section-${sec.key}`;
   box.innerHTML=`<h2 class="section-title">${sec.name}</h2><div id="${sec.key}-box" class="items-box"></div>`;
   app.appendChild(box);
 
@@ -118,3 +294,9 @@ sections.forEach(sec=>{
 
   loadData(sec.key);
 });
+
+setInterval(updateTimers, 1000);
+updateHeaderTime();
+setInterval(updateHeaderTime, 1000);
+updateHeaderWeather();
+setInterval(updateHeaderWeather, 600000);
