@@ -661,11 +661,6 @@ h1 {
   margin-top: 10px;
   display: grid;
   gap: 8px;
-  max-height: 300px;
-  overflow: auto;
-  padding-right: 4px;
-  -webkit-overflow-scrolling: touch;
-  overscroll-behavior: contain;
 }
 
 .rating-row {
@@ -1297,9 +1292,6 @@ select:focus {
     border-radius: 12px;
   }
 
-  .rating-list {
-    max-height: 240px;
-  }
 
   .chat-card {
     margin-top: 10px;
