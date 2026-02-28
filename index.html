@@ -27,6 +27,42 @@
     <h1>Стоп лист</h1>
     <div id="header-time" class="header-time" aria-live="polite"></div>
     <div id="header-weather" class="header-weather" aria-live="polite">Одесса: загрузка погоды и воды...</div>
+    <div id="deviceInfo"
+      style="
+      position:fixed;
+      top:calc(10px + env(safe-area-inset-top));
+      left:10px;
+      background:black;
+      color:white;
+      padding:10px;
+      border-radius:10px;
+      z-index:9999;">
+      Определение устройства...
+    </div>
+    <script>
+      function detectDevice() {
+        const ua = navigator.userAgent || "";
+        const isIOS = /iPhone|iPad|iPod/i.test(ua);
+        const isSafari = /Safari/i.test(ua) && !/CriOS|FxiOS|EdgiOS|OPiOS/i.test(ua);
+        const isStandalone = window.navigator.standalone === true || window.matchMedia("(display-mode: standalone)").matches;
+        let result = "";
+
+        if (isStandalone) {
+          result = "✅ Запущено как приложение (APP mode)";
+        } else if (isIOS && isSafari) {
+          result = "📱 iPhone Safari (можно установить как APP)";
+        } else if (isIOS && !isSafari) {
+          result = "📱 iPhone, но НЕ Safari (Google/Chrome)";
+        } else {
+          result = "💻 ПК или Android";
+        }
+
+        const el = document.getElementById("deviceInfo");
+        if (el) el.innerText = result;
+      }
+
+      detectDevice();
+    </script>
   </header>
   <main id="app"></main>
 </div>

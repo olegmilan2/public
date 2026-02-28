@@ -100,6 +100,28 @@ function isStandaloneMode(){
   return window.matchMedia("(display-mode: standalone)").matches || window.navigator.standalone === true;
 }
 
+function updateDeviceInfo(){
+  const el = document.getElementById("deviceInfo");
+  if(!el) return;
+
+  const isStandalone = isStandaloneMode();
+  const iphone = isIphone();
+  const safari = isIphoneSafari();
+
+  let result = "";
+  if(isStandalone){
+    result = "✅ Запущено как приложение (APP mode)";
+  } else if(iphone && safari){
+    result = "📱 iPhone Safari (можно установить как APP)";
+  } else if(iphone && !safari){
+    result = "📱 iPhone, но НЕ Safari (Google/Chrome)";
+  } else {
+    result = "💻 ПК или Android";
+  }
+
+  el.textContent = result;
+}
+
 function showInstallPrompt(promptEl){
   setTimeout(() => {
     promptEl.classList.add("show");
@@ -444,3 +466,4 @@ window.addEventListener("appinstalled", () => {
 
 initIphoneInstallPrompt();
 initAndroidInstallPrompt();
+updateDeviceInfo();
