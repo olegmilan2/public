@@ -546,17 +546,39 @@ function setActiveView(view){
   const showEl = isChat ? chatView : stoplistView;
   const hideEl = isChat ? stoplistView : chatView;
 
-  // Animate panel switch without reflow-jank: fade/slide out then hide.
-  hideEl.classList.add("is-hiding");
-  showEl.hidden = false;
-  showEl.classList.remove("is-hiding");
-  requestAnimationFrame(() => showEl.classList.remove("is-hidden"));
+  function animateShow(el){
+    if(!el) return;
+    if(el.dataset.animTimer){
+      clearTimeout(Number(el.dataset.animTimer));
+      delete el.dataset.animTimer;
+    }
+    el.hidden = false;
+    el.classList.remove("is-hiding");
+    // Ensure we always transition from hidden -> visible.
+    el.classList.add("is-hidden");
+    requestAnimationFrame(() => {
+      el.classList.remove("is-hidden");
+    });
+  }
 
-  setTimeout(() => {
-    hideEl.hidden = true;
-    hideEl.classList.add("is-hidden");
-    hideEl.classList.remove("is-hiding");
-  }, 180);
+  function animateHide(el){
+    if(!el || el.hidden) return;
+    if(el.dataset.animTimer){
+      clearTimeout(Number(el.dataset.animTimer));
+      delete el.dataset.animTimer;
+    }
+    el.classList.add("is-hiding");
+    el.classList.add("is-hidden");
+    const t = setTimeout(() => {
+      el.hidden = true;
+      el.classList.remove("is-hiding");
+      delete el.dataset.animTimer;
+    }, 210);
+    el.dataset.animTimer = String(t);
+  }
+
+  animateHide(hideEl);
+  animateShow(showEl);
 
   if(isChat){
     // Ensure the latest message is visible when entering chat.
@@ -577,6 +599,8 @@ function initViewTabs(){
   const chatView = document.getElementById("view-chat");
   if(stoplistView) stoplistView.classList.remove("is-hidden");
   if(chatView) chatView.classList.add("is-hidden");
+  if(stoplistView) stoplistView.hidden = false;
+  if(chatView) chatView.hidden = true;
   setActiveView(saved === "chat" ? "chat" : "stoplist");
 }
 
@@ -718,27 +742,23 @@ function initChat(){
   }
 
   listEl.addEventListener("click", (e) => {
-    const btn = e.target && e.target.closest ? e.target.closest(".chat-like-btn") : null;
-    if(!btn) return;
-    e.preventDefault();
-    btn.classList.remove("pulse");
-    // Force restart animation on rapid taps.
-    void btn.offsetWidth;
-    btn.classList.add("pulse");
-    setTimeout(() => btn.classList.remove("pulse"), 260);
-    toggleLike(btn.dataset.id);
-  });
+    const likeBtn = e.target && e.target.closest ? e.target.closest(".chat-like-btn") : null;
+    if(likeBtn){
+      e.preventDefault();
+      toggleLike(likeBtn.dataset.id);
+      return;
+    }
 
-  listEl.addEventListener("click", (e) => {
-    const btn = e.target && e.target.closest ? e.target.closest(".chat-reply-block") : null;
-    if(!btn) return;
-    const replyId = btn.dataset.replyId;
-    if(!replyId) return;
-    const node = Array.from(listEl.querySelectorAll(".chat-msg[data-id]")).find(el => el.dataset.id === replyId);
-    if(!node) return;
-    node.scrollIntoView({ block: "center", behavior: "smooth" });
-    node.classList.add("chat-highlight");
-    setTimeout(() => node.classList.remove("chat-highlight"), 900);
+    const replyBtn = e.target && e.target.closest ? e.target.closest(".chat-reply-block") : null;
+    if(replyBtn){
+      const replyId = replyBtn.dataset.replyId;
+      if(!replyId) return;
+      const node = Array.from(listEl.querySelectorAll(".chat-msg[data-id]")).find(el => el.dataset.id === replyId);
+      if(!node) return;
+      node.scrollIntoView({ block: "center", behavior: "smooth" });
+      node.classList.add("chat-highlight");
+      setTimeout(() => node.classList.remove("chat-highlight"), 900);
+    }
   });
 
   formEl.addEventListener("submit", async (e) => {

@@ -357,13 +357,14 @@ h1 {
 
 .view {
   opacity: 1;
-  transform: translateY(0);
-  transition: opacity 0.18s ease, transform 0.2s ease;
+  transform: translate3d(0, 0, 0);
+  will-change: opacity, transform;
+  transition: opacity 0.2s ease, transform 0.22s ease;
 }
 
 .view.is-hidden {
   opacity: 0;
-  transform: translateY(6px);
+  transform: translate3d(0, 8px, 0);
 }
 
 .view.is-hiding {
@@ -454,7 +455,7 @@ h1 {
   padding: 8px 10px;
   border-radius: 14px;
   border: 1px solid var(--chat-bubble-border);
-  background: color-mix(in srgb, var(--chat-bubble) 92%, transparent);
+  background: var(--chat-bubble);
   display: flex;
   align-items: flex-start;
   gap: 10px;
@@ -1537,6 +1538,18 @@ select:focus {
   color: rgba(52, 68, 102, 0.85);
 }
 
+.chat-like-btn.liked {
+  background: rgba(255, 69, 58, 0.12);
+  border-color: rgba(255, 69, 58, 0.22);
+  color: var(--danger);
+}
+
+:root[data-theme="light"] .chat-like-btn.liked {
+  background: rgba(255, 59, 48, 0.12);
+  border-color: rgba(255, 59, 48, 0.22);
+  color: var(--danger);
+}
+
 .chat-like-btn:hover,
 .chat-like-btn:active {
   transform: none;
@@ -1546,32 +1559,33 @@ select:focus {
   font: 800 10px/1 "Manrope", "Segoe UI", sans-serif;
 }
 
-.chat-like-btn.liked {
-  background: rgba(255, 90, 102, 0.12);
-  border-color: rgba(255, 90, 102, 0.24);
-  color: var(--danger);
-}
-
 .chat-like-btn.liked .chat-like-ico path {
   fill: currentColor;
 }
 
-@keyframes like-pop {
-  0% { transform: scale(1); }
-  45% { transform: scale(1.12); }
-  100% { transform: scale(1); }
+.chat-like-btn {
+  transition: background-color 0.18s ease, border-color 0.18s ease, color 0.18s ease, transform 0.12s ease;
 }
 
-.chat-like-btn.pulse {
-  animation: like-pop 0.26s ease;
+.chat-like-btn:active {
+  transform: scale(0.96);
+}
+
+.chat-like-ico {
+  transition: transform 0.18s ease;
+}
+
+.chat-like-btn:active .chat-like-ico {
+  transform: scale(1.12);
 }
 
 @media (prefers-reduced-motion: reduce) {
   .view {
     transition: none;
   }
-  .chat-like-btn.pulse {
-    animation: none;
+  .chat-like-btn,
+  .chat-like-ico {
+    transition: none;
   }
 }
 
