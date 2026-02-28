@@ -20,6 +20,8 @@ const sections=[
 
 const defaultItems = {};
 const USER_NAME_KEY = "stoplist_user_name";
+const THEME_KEY = "stoplist_theme";
+const ACTIVE_VIEW_KEY = "stoplist_active_view";
 const IOS_INSTALL_DISMISSED_KEY = "iphone_install_prompt_dismissed";
 const ANDROID_INSTALL_DISMISSED_KEY = "android_install_prompt_dismissed";
 const NEW_ITEM_NOTIFICATIONS_KEY = "new_item_notifications_enabled";
@@ -102,6 +104,51 @@ function storageSet(key, value){
   }
 }
 
+function isLightTheme(){
+  return document.documentElement.dataset.theme === "light";
+}
+
+function updateThemeMeta(){
+  const themeColor = document.querySelector('meta[name="theme-color"]');
+  if(themeColor){
+    themeColor.setAttribute("content", isLightTheme() ? "#f6f7fb" : "#0b1020");
+  }
+}
+
+function syncThemeToggle(){
+  const toggle = document.getElementById("theme-toggle");
+  if(!toggle) return;
+  const light = isLightTheme();
+  toggle.setAttribute("aria-checked", light ? "true" : "false");
+  toggle.setAttribute("aria-label", light ? "Тёмная тема" : "Светлая тема");
+}
+
+function setTheme(theme){
+  const next = theme === "light" ? "light" : "dark";
+  document.documentElement.dataset.theme = next;
+  storageSet(THEME_KEY, next);
+  updateThemeMeta();
+  syncThemeToggle();
+}
+
+function initThemeToggle(){
+  const toggle = document.getElementById("theme-toggle");
+  if(!toggle) return;
+
+  // Fallback if the early inline script couldn't read localStorage.
+  if(document.documentElement.dataset.theme !== "light" && document.documentElement.dataset.theme !== "dark"){
+    const saved = (storageGet(THEME_KEY) || "").trim();
+    document.documentElement.dataset.theme = saved === "light" ? "light" : "dark";
+  }
+
+  updateThemeMeta();
+  syncThemeToggle();
+
+  toggle.addEventListener("click", () => {
+    setTheme(isLightTheme() ? "dark" : "light");
+  });
+}
+
 function encodeDbKey(value){
   return encodeURIComponent(value).replace(/\./g, "%2E");
 }
@@ -114,6 +161,8 @@ function requestUserNameOnStart(){
   storageSet(USER_NAME_KEY, name);
   return name;
 }
+
+initThemeToggle();
 
 function isIphoneSafari(){
   const ua = navigator.userAgent || "";
@@ -475,6 +524,168 @@ function escapeHtml(value){
     .replace(/'/g, "&#39;");
 }
 
+function scrollChatToBottom(){
+  const listEl = document.getElementById("chat-messages");
+  if(!listEl) return;
+  listEl.scrollTop = listEl.scrollHeight;
+}
+
+function setActiveView(view){
+  const stoplistTab = document.getElementById("tab-stoplist");
+  const chatTab = document.getElementById("tab-chat");
+  const stoplistView = document.getElementById("view-stoplist");
+  const chatView = document.getElementById("view-chat");
+  if(!stoplistTab || !chatTab || !stoplistView || !chatView) return;
+
+  const next = view === "chat" ? "chat" : "stoplist";
+  storageSet(ACTIVE_VIEW_KEY, next);
+
+  const isChat = next === "chat";
+  stoplistTab.setAttribute("aria-selected", isChat ? "false" : "true");
+  chatTab.setAttribute("aria-selected", isChat ? "true" : "false");
+  stoplistView.hidden = isChat;
+  chatView.hidden = !isChat;
+
+  if(isChat){
+    // Ensure the latest message is visible when entering chat.
+    requestAnimationFrame(() => requestAnimationFrame(scrollChatToBottom));
+    try { chatTab.focus({ preventScroll: true }); } catch (e) { /* ignore */ }
+  }
+}
+
+function initViewTabs(){
+  const stoplistTab = document.getElementById("tab-stoplist");
+  const chatTab = document.getElementById("tab-chat");
+  if(stoplistTab) stoplistTab.addEventListener("click", () => setActiveView("stoplist"));
+  if(chatTab) chatTab.addEventListener("click", () => setActiveView("chat"));
+
+  const saved = (storageGet(ACTIVE_VIEW_KEY) || "").trim();
+  setActiveView(saved === "chat" ? "chat" : "stoplist");
+}
+
+function initChat(){
+  const listEl = document.getElementById("chat-messages");
+  const formEl = document.getElementById("chat-form");
+  const inputEl = document.getElementById("chat-input");
+  const sendEl = document.getElementById("chat-send");
+  if(!listEl || !formEl || !inputEl || !sendEl) return;
+
+  const likeKey = encodeDbKey(currentUser || "Без имени");
+  const ref = db.ref("chat/messages").orderByChild("ts").limitToLast(200);
+
+  function shouldStickToBottom(){
+    const delta = listEl.scrollHeight - listEl.scrollTop - listEl.clientHeight;
+    return delta < 32;
+  }
+
+  function scrollToBottom(){
+    listEl.scrollTop = listEl.scrollHeight;
+  }
+
+  ref.on("value", snapshot => {
+    const stick = shouldStickToBottom();
+    const data = snapshot.val() || {};
+    const messages = Object.entries(data)
+      .map(([id, msg]) => ({
+        id,
+        text: String(msg?.text || ""),
+        user: String(msg?.user || ""),
+        ts: Number(msg?.ts || 0),
+        likes: (msg?.likes && typeof msg.likes === "object") ? msg.likes : null
+      }))
+      .filter(m => m.text.trim())
+      .sort((a, b) => a.ts - b.ts);
+
+    if(!messages.length){
+      listEl.innerHTML = `<div class="chat-empty">Пока нет сообщений. Напишите первое.</div>`;
+      return;
+    }
+
+    listEl.innerHTML = messages.map(m => {
+      const mine = m.user && m.user === currentUser;
+      const safeUser = escapeHtml(m.user || "Без имени");
+      const safeText = escapeHtml(m.text).replace(/\n/g, "<br>");
+      const time = m.ts ? escapeHtml(formatDateTime(m.ts)) : "";
+      const meta = mine ? (time || "") : (time ? `${safeUser} • ${time}` : safeUser);
+      const likesObj = (m.likes && typeof m.likes === "object") ? m.likes : {};
+      const likeCount = Object.keys(likesObj).length;
+      const liked = !!likesObj[likeKey];
+      return `
+        <div class="chat-msg ${mine ? "mine" : "other"}" data-id="${escapeHtml(m.id)}">
+          <div class="chat-bubble">
+            <div class="chat-text">${safeText}</div>
+            <div class="chat-footer">
+              ${meta ? `<div class="chat-meta">${meta}</div>` : `<div></div>`}
+              <button class="chat-like-btn ${liked ? "liked" : ""}" type="button" data-id="${escapeHtml(m.id)}" aria-label="Лайк">
+                <svg class="chat-like-ico" width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                  <path d="M12 21s-7-4.6-9.5-8.9C.5 8.4 2.4 5.7 5.4 5.2c1.7-.3 3.4.4 4.4 1.7 1-1.3 2.7-2 4.4-1.7 3 .5 4.9 3.2 2.9 6.9C19 16.4 12 21 12 21Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+                ${likeCount > 0 ? `<span class="chat-like-count">${likeCount}</span>` : ``}
+              </button>
+            </div>
+          </div>
+        </div>
+      `;
+    }).join("");
+
+    if(stick) scrollToBottom();
+  });
+
+  async function toggleLike(messageId){
+    if(!messageId) return;
+    const likesRef = db.ref(`chat/messages/${messageId}/likes`);
+    try {
+      await likesRef.transaction(current => {
+        const obj = (current && typeof current === "object") ? current : {};
+        const next = { ...obj };
+        if(next[likeKey]){
+          delete next[likeKey];
+        } else {
+          next[likeKey] = true;
+        }
+        return Object.keys(next).length ? next : null;
+      });
+    } catch (e) {
+      // ignore toggle errors (rules/offline)
+    }
+  }
+
+  listEl.addEventListener("click", (e) => {
+    const btn = e.target && e.target.closest ? e.target.closest(".chat-like-btn") : null;
+    if(!btn) return;
+    e.preventDefault();
+    toggleLike(btn.dataset.id);
+  });
+
+  formEl.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const text = String(inputEl.value || "").trim();
+    if(!text) return;
+    inputEl.value = "";
+    sendEl.disabled = true;
+    try {
+      await db.ref("chat/messages").push({
+        text,
+        user: currentUser,
+        ts: firebase.database.ServerValue.TIMESTAMP
+      });
+    } catch (err) {
+      console.error("Chat send error:", err);
+      alert("Не удалось отправить сообщение. Проверьте интернет/правила Firebase.");
+      inputEl.value = text;
+    } finally {
+      sendEl.disabled = false;
+      inputEl.focus();
+    }
+  });
+
+  inputEl.addEventListener("focus", () => {
+    setTimeout(() => {
+      listEl.scrollTop = listEl.scrollHeight;
+    }, 50);
+  });
+}
+
 function ratingItemKey(name){
   return encodeDbKey(normalizeItemName(name));
 }
@@ -605,6 +816,164 @@ function initRating(){
   });
 }
 
+let openSwipeItem = null;
+
+function closeSwipeItem(itemEl){
+  if(!itemEl) return;
+  itemEl.classList.remove("swipe-open", "swiping");
+  const content = itemEl.querySelector(".item-swipe-content");
+  if(content) content.style.transform = "";
+  if(openSwipeItem === itemEl) openSwipeItem = null;
+}
+
+function closeAnyOpenSwipe(exceptEl){
+  if(openSwipeItem && openSwipeItem !== exceptEl){
+    closeSwipeItem(openSwipeItem);
+  }
+}
+
+function clamp(value, min, max){
+  return Math.max(min, Math.min(max, value));
+}
+
+function attachSwipeToDelete(itemEl, secKey, id){
+  if(!itemEl || itemEl.dataset.swipeBound === "1") return;
+  itemEl.dataset.swipeBound = "1";
+
+  const MAX_SWIPE = 160;      // px
+  const OPEN_SWIPE = 88;      // px
+  const OPEN_THRESHOLD = 70;  // px
+  const DELETE_THRESHOLD = 140; // px
+
+  let startX = 0;
+  let startY = 0;
+  let active = false;
+  let dragging = false;
+  let dx = 0;
+
+  function getContent(){
+    return itemEl.querySelector(".item-swipe-content");
+  }
+
+  function setDx(nextDx){
+    dx = clamp(nextDx, -MAX_SWIPE, 0);
+    const content = getContent();
+    if(content) content.style.transform = `translateX(${dx}px)`;
+  }
+
+  function snapTo(target){
+    itemEl.classList.remove("swiping");
+    const content = getContent();
+    if(content) content.style.transform = "";
+    if(target === "open"){
+      itemEl.classList.add("swipe-open");
+      openSwipeItem = itemEl;
+    } else {
+      itemEl.classList.remove("swipe-open");
+      if(openSwipeItem === itemEl) openSwipeItem = null;
+    }
+  }
+
+  itemEl.addEventListener("pointerdown", (e) => {
+    if(e.button != null && e.button !== 0) return;
+
+    // Don't start swipe from controls.
+    const t = e.target;
+    if(t && t.closest && t.closest("input, select, textarea, button")) return;
+
+    closeAnyOpenSwipe(itemEl);
+    active = true;
+    dragging = false;
+    dx = 0;
+    startX = e.clientX;
+    startY = e.clientY;
+    itemEl.classList.add("swiping");
+    try { itemEl.setPointerCapture(e.pointerId); } catch (err) { /* ignore */ }
+  }, { passive: true });
+
+  itemEl.addEventListener("pointermove", (e) => {
+    if(!active) return;
+
+    const moveX = e.clientX - startX;
+    const moveY = e.clientY - startY;
+
+    // If user scrolls vertically, abort swipe.
+    if(!dragging && Math.abs(moveY) > 8 && Math.abs(moveY) > Math.abs(moveX)){
+      active = false;
+      itemEl.classList.remove("swiping");
+      return;
+    }
+
+    if(!dragging && Math.abs(moveX) > 6){
+      dragging = true;
+    }
+    if(!dragging) return;
+
+    // Prevent "ghost clicks" after a drag.
+    itemEl.dataset.swipeBlockClick = "1";
+    e.preventDefault();
+
+    setDx(moveX);
+  }, { passive: false });
+
+  itemEl.addEventListener("pointerup", async () => {
+    if(!active){
+      closeAnyOpenSwipe(null);
+      return;
+    }
+    active = false;
+
+    if(!dragging){
+      itemEl.classList.remove("swiping");
+      return;
+    }
+
+    const absDx = Math.abs(dx);
+    if(absDx >= DELETE_THRESHOLD){
+      closeSwipeItem(itemEl);
+      await deleteItem(secKey, id);
+      return;
+    }
+
+    if(absDx >= OPEN_THRESHOLD){
+      snapTo("open");
+      return;
+    }
+
+    snapTo("closed");
+  });
+
+  itemEl.addEventListener("pointercancel", () => {
+    active = false;
+    if(itemEl.classList.contains("swipe-open")){
+      snapTo("open");
+    } else {
+      snapTo("closed");
+    }
+  });
+
+  // Tap-to-delete on the revealed underlay.
+  itemEl.addEventListener("click", async (e) => {
+    if(itemEl.dataset.swipeBlockClick === "1"){
+      itemEl.dataset.swipeBlockClick = "0";
+      e.preventDefault();
+      e.stopPropagation();
+      return;
+    }
+
+    const deleteBtn = e.target && e.target.closest ? e.target.closest(".item-swipe-delete") : null;
+    if(!deleteBtn) return;
+    closeSwipeItem(itemEl);
+    await deleteItem(secKey, id);
+  });
+}
+
+document.addEventListener("pointerdown", (e) => {
+  if(!openSwipeItem) return;
+  if(openSwipeItem.contains(e.target)) return;
+  closeSwipeItem(openSwipeItem);
+}, { passive: true });
+
 // ===== Рендер =====
 function renderSection(secKey, data){
   const box=document.getElementById(secKey+"-box");
@@ -632,19 +1001,25 @@ function renderSection(secKey, data){
     const step=item.type==="portion"?"0.01":"1";
 
     div.innerHTML=`
-      <div class="line">
-        <div class="name">${item.name}</div>
-        <div class="type">${typeLabel}</div>
-        <input class="qty" type="number" step="${step}" value="${item.qty}" onchange="changeQty('${secKey}','${id}',this.value)">
-        <input class="status-check" type="checkbox" ${item.status==="ok"?"checked":""} onchange="toggleStatus('${secKey}','${id}',this.checked)" title="Есть в наличии">
-        <button class="btn-delete" onclick="deleteItem('${secKey}','${id}')">×</button>
+      <div class="item-swipe-under" aria-hidden="true">
+        <button class="item-swipe-delete" type="button" tabindex="-1">Удалить</button>
       </div>
-      <div class="timer ${item.status==="out"?"show":""}" data-out-since="${item.outSince || ""}">${getTimerLabel(item)}</div>
-      <div class="meta">${getStatusMetaLabel(item)}</div>
+      <div class="item-swipe-content">
+        <div class="line">
+          <div class="name">${item.name}</div>
+          <div class="type">${typeLabel}</div>
+          <input class="qty" type="number" step="${step}" value="${item.qty}" onchange="changeQty('${secKey}','${id}',this.value)">
+          <input class="status-check" type="checkbox" ${item.status==="ok"?"checked":""} onchange="toggleStatus('${secKey}','${id}',this.checked)" title="Есть в наличии">
+          <button class="btn-delete" onclick="deleteItem('${secKey}','${id}')">×</button>
+        </div>
+        <div class="timer ${item.status==="out"?"show":""}" data-out-since="${item.outSince || ""}">${getTimerLabel(item)}</div>
+        <div class="meta">${getStatusMetaLabel(item)}</div>
+      </div>
     `;
     box.appendChild(div);
 
     if(isNew){
+      attachSwipeToDelete(div, secKey, id);
       div.classList.add("item-enter");
       requestAnimationFrame(() => {
         div.classList.add("item-enter-active");
@@ -837,6 +1212,8 @@ window.addEventListener("appinstalled", () => {
 initIphoneInstallPrompt();
 initAndroidInstallPrompt();
 updateDeviceInfo();
+initViewTabs();
+initChat();
 initNewItemNotifications();
 initDangerActions();
 initRating();
