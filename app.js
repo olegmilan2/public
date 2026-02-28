@@ -243,7 +243,11 @@ function notifyNewItem(secKey, item){
 }
 
 function initNewItemNotifications(){
-  initNotificationPermissionAuto();
+  // Не запрашиваем разрешение автоматически, чтобы не мешать вводу в полях.
+  if("Notification" in window && Notification.permission === "granted"){
+    storageSet(NEW_ITEM_NOTIFICATIONS_KEY, "1");
+    initFcmToken();
+  }
 
   sections.forEach(sec => {
     let initialLoaded = false;
@@ -501,8 +505,65 @@ function loadData(secKey){
       db.ref(secKey).update(defaultItems[secKey]);
       return;
     }
+    ensureRatingTracked(secKey, data);
     ensureOutSince(secKey, data);
     renderSection(secKey, data);
+  });
+}
+
+function normalizeDishKey(name){
+  return String(name || "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, " ");
+}
+
+function increaseRating(name){
+  const dishName = String(name || "").trim();
+  if(!dishName) return;
+  const key = encodeDbKey(normalizeDishKey(dishName));
+  const ref = db.ref(`rating/${key}`);
+  ref.transaction(current => {
+    const prev = current || {};
+    return {
+      name: prev.name || dishName,
+      count: Number(prev.count || 0) + 1,
+      totalOutMs: Number(prev.totalOutMs || 0)
+    };
+  }).catch(err => {
+    console.error("Rating update error:", err);
+  });
+}
+
+function ensureRatingTracked(secKey, data){
+  if(secKey !== "bar" && secKey !== "kitchen") return;
+  for(const id in data){
+    const item = data[id];
+    if(!item || !item.name) continue;
+    if(item.ratingTracked === true) continue;
+
+    increaseRating(item.name);
+    db.ref(`${secKey}/${id}/ratingTracked`).set(true);
+  }
+}
+
+function addOutDurationToRating(name, durationMs){
+  const dishName = String(name || "").trim();
+  if(!dishName) return;
+  const safeDuration = Math.max(0, Number(durationMs || 0));
+  if(!safeDuration) return;
+
+  const key = encodeDbKey(normalizeDishKey(dishName));
+  const ref = db.ref(`rating/${key}`);
+  ref.transaction(current => {
+    const prev = current || {};
+    return {
+      name: prev.name || dishName,
+      count: Number(prev.count || 0),
+      totalOutMs: Number(prev.totalOutMs || 0) + safeDuration
+    };
+  }).catch(err => {
+    console.error("Rating duration update error:", err);
   });
 }
 
@@ -513,8 +574,16 @@ function changeQty(secKey,id,value){
     ...actorMeta()
   });
 }
-function setStatus(secKey,id,status){
-  db.ref(`${secKey}/${id}`).update({
+async function setStatus(secKey,id,status){
+  const ref = db.ref(`${secKey}/${id}`);
+  const snap = await ref.once("value");
+  const item = snap.val() || {};
+
+  if(item.status === "out" && status === "ok" && item.outSince){
+    addOutDurationToRating(item.name, Date.now() - Number(item.outSince));
+  }
+
+  ref.update({
     status,
     outSince: status==="out" ? firebase.database.ServerValue.TIMESTAMP : null,
     statusBy: currentUser,
@@ -525,9 +594,15 @@ function setStatus(secKey,id,status){
 function toggleStatus(secKey,id,isChecked){
   setStatus(secKey,id,isChecked ? "ok" : "out");
 }
-function deleteItem(secKey,id){
+async function deleteItem(secKey,id){
   if(!confirm("Удалить позицию?")) return;
-  db.ref(`${secKey}/${id}`).remove();
+  const ref = db.ref(`${secKey}/${id}`);
+  const snap = await ref.once("value");
+  const item = snap.val() || {};
+  if(item.status === "out" && item.outSince){
+    addOutDurationToRating(item.name, Date.now() - Number(item.outSince));
+  }
+  ref.remove();
 }
 
 // ===== Добавление =====
@@ -547,10 +622,39 @@ function addItem(secKey){
     statusAt: firebase.database.ServerValue.TIMESTAMP,
     createdBy: currentUser,
     createdAt: firebase.database.ServerValue.TIMESTAMP,
+    ratingTracked: true,
     ...actorMeta(),
     type:type
   });
+  increaseRating(name);
   nameEl.value="";
+}
+
+async function clearStopListWithPassword(){
+  const pass = prompt("Введите пароль для удаления стоп листа:");
+  if(pass === null) return;
+  if(pass.trim() !== "1"){
+    alert("Неверный пароль");
+    return;
+  }
+  if(!confirm("Удалить весь стоп лист? Это действие необратимо.")) return;
+
+  try {
+    await Promise.all([
+      db.ref("bar").remove(),
+      db.ref("kitchen").remove()
+    ]);
+    alert("Стоп лист удален");
+  } catch (e) {
+    alert("Ошибка удаления. Проверьте интернет.");
+  }
+}
+
+function initDangerActions(){
+  const clearBtn = document.getElementById("clear-stop-list");
+  if(clearBtn){
+    clearBtn.addEventListener("click", clearStopListWithPassword);
+  }
 }
 
 // ===== Инициализация UI =====
@@ -575,6 +679,14 @@ sections.forEach(sec=>{
     <button class="btn-add" onclick="addItem('${sec.key}')">Добавить позицию</button>
   `;
   box.appendChild(addForm);
+  const nameInput = addForm.querySelector(`#${sec.key}-name`);
+  if(nameInput){
+    nameInput.addEventListener("keydown", event => {
+      if(event.key !== "Enter") return;
+      event.preventDefault();
+      addItem(sec.key);
+    });
+  }
 
   loadData(sec.key);
 });
@@ -602,3 +714,4 @@ initIphoneInstallPrompt();
 initAndroidInstallPrompt();
 updateDeviceInfo();
 initNewItemNotifications();
+initDangerActions();

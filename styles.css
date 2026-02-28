@@ -134,6 +134,40 @@ h1 {
   color: #4b5c7c;
 }
 
+.header-actions {
+  margin-top: 6px;
+  display: flex;
+  justify-content: center;
+  gap: 6px;
+}
+
+.clear-stop-list-btn,
+.rating-link-btn {
+  padding: 5px 9px;
+  border-radius: 9px;
+  font: 700 11px/1.2 "Manrope", "Segoe UI", sans-serif;
+}
+
+.clear-stop-list-btn {
+  border: 1px solid #efb1b1;
+  background: linear-gradient(145deg, #ffe9e9 0%, #ffdede 100%);
+  color: #8f1f1f;
+}
+
+.rating-link-btn {
+  border: 1px solid #b8d1fb;
+  background: linear-gradient(145deg, #e9f2ff 0%, #dbeaff 100%);
+  color: #1f4b96;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+}
+
+.clear-stop-list-btn:hover,
+.rating-link-btn:hover {
+  transform: translateY(-1px);
+}
+
 
 
 #app {
@@ -561,6 +595,18 @@ select:focus {
   .header-weather {
     font-size: 9px;
     margin-top: 2px;
+  }
+
+  .header-actions {
+    margin-top: 4px;
+    gap: 4px;
+  }
+
+  .clear-stop-list-btn,
+  .rating-link-btn {
+    padding: 4px 8px;
+    border-radius: 8px;
+    font-size: 10px;
   }
 
 

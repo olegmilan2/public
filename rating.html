@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Рейтинг стоп листа</title>
+  <link rel="stylesheet" href="styles.css">
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js" defer></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js" defer></script>
+  <style>
+    .rating-page {
+      width: min(860px, calc(100% - 24px));
+      margin: 14px auto 18px;
+    }
+    .rating-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 8px;
+    }
+    .back-btn {
+      border: 1px solid #b8d1fb;
+      background: linear-gradient(145deg, #e9f2ff 0%, #dbeaff 100%);
+      color: #1f4b96;
+      text-decoration: none;
+      border-radius: 9px;
+      padding: 5px 10px;
+      font: 700 11px/1.2 "Manrope", "Segoe UI", sans-serif;
+    }
+    .rating-list {
+      display: grid;
+      gap: 6px;
+    }
+  </style>
+</head>
+<body>
+  <div class="rating-page">
+    <div class="rating-header">
+      <h1>🏆 Рейтинг стоп листа</h1>
+      <a href="index.html" class="back-btn">Назад</a>
+    </div>
+    <div id="rating-list" class="rating-list"></div>
+  </div>
+
+  <script>
+    const firebaseConfig = {
+      apiKey: "AIzaSyA8VJCylVRlIXgMKZlHWe8pAmu9ZslEPmk",
+      authDomain: "check-c1174.firebaseapp.com",
+      projectId: "check-c1174",
+      storageBucket: "check-c1174.firebasestorage.app",
+      messagingSenderId: "620822198863",
+      appId: "1:620822198863:web:ab8954aa72bd6cafc1483a",
+      measurementId: "G-QWRB5L1N94",
+      databaseURL: "https://check-c1174-default-rtdb.firebaseio.com/"
+    };
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.database();
+
+    const state = {
+      rating: {},
+      bar: {},
+      kitchen: {}
+    };
+
+    function normalizeDishKey(name) {
+      return String(name || "")
+        .trim()
+        .toLowerCase()
+        .replace(/\s+/g, " ");
+    }
+
+    function collectActiveOutMs(items) {
+      const outMap = {};
+      Object.values(items || {}).forEach(item => {
+        if (!item || !item.name) return;
+        if (item.status !== "out" || !item.outSince) return;
+        const key = normalizeDishKey(item.name);
+        const prev = outMap[key] || { name: item.name, activeOutMs: 0 };
+        prev.activeOutMs += Math.max(0, Date.now() - Number(item.outSince));
+        outMap[key] = prev;
+      });
+      return outMap;
+    }
+
+    function renderRating(){
+      const box = document.getElementById("rating-list");
+      if(!box) return;
+      box.innerHTML = "";
+
+      const rowsMap = {};
+      Object.values(state.rating || {}).forEach(item => {
+        if (!item || !item.name) return;
+        const key = normalizeDishKey(item.name);
+        rowsMap[key] = {
+          name: item.name,
+          count: Number(item.count || 0),
+          totalOutMs: Number(item.totalOutMs || 0),
+          activeOutMs: 0
+        };
+      });
+
+      const activeBar = collectActiveOutMs(state.bar);
+      const activeKitchen = collectActiveOutMs(state.kitchen);
+      [activeBar, activeKitchen].forEach(group => {
+        Object.entries(group).forEach(([key, entry]) => {
+          if (!rowsMap[key]) {
+            rowsMap[key] = { name: entry.name, count: 0, totalOutMs: 0, activeOutMs: 0 };
+          }
+          rowsMap[key].activeOutMs += entry.activeOutMs;
+        });
+      });
+
+      const rows = Object.values(rowsMap)
+        .map(item => ({
+          ...item,
+          effectiveOutMs: Number(item.totalOutMs || 0) + Number(item.activeOutMs || 0)
+        }))
+        .sort((a, b) => b.effectiveOutMs - a.effectiveOutMs);
+
+      if(rows.length === 0){
+        const empty = document.createElement("div");
+        empty.className = "rating-empty";
+        empty.textContent = "Пока нет добавленных блюд";
+        box.appendChild(empty);
+        return;
+      }
+
+      rows.forEach((item, index) => {
+        const totalMs = Number(item.effectiveOutMs || 0);
+        const totalHours = Math.floor(totalMs / 3600000);
+        const totalMinutes = Math.floor((totalMs % 3600000) / 60000);
+        const activeHours = Math.floor(Number(item.activeOutMs || 0) / 3600000);
+        const activeMinutes = Math.floor((Number(item.activeOutMs || 0) % 3600000) / 60000);
+        const row = document.createElement("div");
+        row.className = "rating-row";
+        row.innerHTML = `
+          <div class="rating-rank">${index + 1}</div>
+          <div class="rating-name">${item.name}<br><small>добавляли: ${Number(item.count || 0)} раз • сейчас в стопе: ${activeHours}ч ${activeMinutes}м</small></div>
+          <div class="rating-count">${totalHours}ч ${totalMinutes}м</div>
+        `;
+        box.appendChild(row);
+      });
+    }
+
+    db.ref("rating").on("value", snapshot => {
+      state.rating = snapshot.val() || {};
+      renderRating();
+    });
+    db.ref("bar").on("value", snapshot => {
+      state.bar = snapshot.val() || {};
+      renderRating();
+    });
+    db.ref("kitchen").on("value", snapshot => {
+      state.kitchen = snapshot.val() || {};
+      renderRating();
+    });
+    setInterval(renderRating, 1000);
+  </script>
+</body>
+</html>
