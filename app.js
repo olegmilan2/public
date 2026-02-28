@@ -3,7 +3,8 @@ const firebaseConfig = {
   apiKey: "AIzaSyA8VJCylVRlIXgMKZlHWe8pAmu9ZslEPmk",
   authDomain: "check-c1174.firebaseapp.com",
   projectId: "check-c1174",
-  storageBucket: "check-c1174.firebasestorage.app",
+  // Firebase Storage default bucket is typically "<project-id>.appspot.com".
+  storageBucket: "check-c1174.appspot.com",
   messagingSenderId: "620822198863",
   appId: "1:620822198863:web:ab8954aa72bd6cafc1483a",
   measurementId: "G-QWRB5L1N94",
@@ -151,6 +152,16 @@ function initThemeToggle(){
 
 function encodeDbKey(value){
   return encodeURIComponent(value).replace(/\./g, "%2E");
+}
+
+function withTimeout(promise, ms, label){
+  let timer = null;
+  const timeout = new Promise((_, reject) => {
+    timer = setTimeout(() => reject(new Error(label || "timeout")), ms);
+  });
+  return Promise.race([promise, timeout]).finally(() => {
+    if(timer) clearTimeout(timer);
+  });
 }
 
 function requestUserNameOnStart(){
@@ -610,8 +621,13 @@ function setActiveView(view){
     }
     el.hidden = false;
     el.classList.remove("is-hiding");
+    // Show view on top; animate only the entering view (no "peeking" of the other one).
+    stoplistView.classList.remove("is-active");
+    chatView.classList.remove("is-active");
+    el.classList.add("is-active");
+
     // Ensure we always transition from hidden -> visible.
-    el.classList.add("is-hidden");
+    el.classList.add("is-hidden"); // used as "enter from"
     requestAnimationFrame(() => {
       el.classList.remove("is-hidden");
     });
@@ -624,7 +640,6 @@ function setActiveView(view){
       delete el.dataset.animTimer;
     }
     el.classList.add("is-hiding");
-    el.classList.add("is-hidden");
     const t = setTimeout(() => {
       el.hidden = true;
       el.classList.remove("is-hiding");
@@ -665,6 +680,7 @@ function initChat(){
   const formEl = document.getElementById("chat-form");
   const inputEl = document.getElementById("chat-input");
   const sendEl = document.getElementById("chat-send");
+  const uploadStatusEl = document.getElementById("chat-upload-status");
   const replyEl = document.getElementById("chat-reply");
   const replyMetaEl = document.getElementById("chat-reply-meta");
   const replySnippetEl = document.getElementById("chat-reply-snippet");
@@ -675,6 +691,23 @@ function initChat(){
   const ref = db.ref("chat/messages").orderByChild("ts").limitToLast(200);
   let currentReply = null;
   const messageIndex = new Map();
+  // If we re-render after a like, keep the pulse animation for a short time.
+  const pulseUntilById = new Map();
+
+  function showUploadStatus(text){
+    if(!uploadStatusEl) return;
+    const t = String(text || "").trim();
+    uploadStatusEl.textContent = t;
+    uploadStatusEl.hidden = !t;
+  }
+
+  function formatError(err){
+    if(!err) return "Unknown error";
+    if(typeof err === "string") return err;
+    const code = err.code ? String(err.code) : "";
+    const msg = err.message ? String(err.message) : String(err);
+    return code ? `${code}: ${msg}` : msg;
+  }
 
   function shouldStickToBottom(){
     const delta = listEl.scrollHeight - listEl.scrollTop - listEl.clientHeight;
@@ -728,11 +761,17 @@ function initChat(){
         likes: (msg?.likes && typeof msg.likes === "object") ? msg.likes : null,
         reply: (msg?.reply && typeof msg.reply === "object") ? msg.reply : null
       }))
-      .filter(m => m.text.trim())
+      .filter(m => m.text && m.text.trim())
       .sort((a, b) => a.ts - b.ts);
 
     messageIndex.clear();
     messages.forEach(m => messageIndex.set(m.id, m));
+
+    // Cleanup expired pulses.
+    const now = Date.now();
+    for(const [id, until] of pulseUntilById.entries()){
+      if(!until || until <= now) pulseUntilById.delete(id);
+    }
 
     if(!messages.length){
       listEl.innerHTML = `<div class="chat-empty">Пока нет сообщений. Напишите первое.</div>`;
@@ -748,6 +787,7 @@ function initChat(){
       const likesObj = (m.likes && typeof m.likes === "object") ? m.likes : {};
       const likeCount = Object.keys(likesObj).length;
       const liked = !!likesObj[likeKey];
+      const pulsing = pulseUntilById.has(m.id);
       const replyUser = m.reply && m.reply.user ? escapeHtml(String(m.reply.user)) : "";
       const replyText = m.reply && m.reply.text ? escapeHtml(String(m.reply.text)) : "";
       const replyId = m.reply && m.reply.id ? escapeHtml(String(m.reply.id)) : "";
@@ -763,9 +803,9 @@ function initChat(){
             <div class="chat-text">${safeText}</div>
             <div class="chat-footer">
               ${meta ? `<div class="chat-meta">${meta}</div>` : `<div></div>`}
-              <button class="chat-like-btn ${liked ? "liked" : ""}" type="button" data-id="${escapeHtml(m.id)}" aria-label="Лайк">
-                <svg class="chat-like-ico" width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                  <path d="M12 21s-7-4.6-9.5-8.9C.5 8.4 2.4 5.7 5.4 5.2c1.7-.3 3.4.4 4.4 1.7 1-1.3 2.7-2 4.4-1.7 3 .5 4.9 3.2 2.9 6.9C19 16.4 12 21 12 21Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+              <button class="chat-like-btn ${liked ? "liked" : ""} ${pulsing ? "pulse" : ""}" type="button" data-id="${escapeHtml(m.id)}" aria-label="Лайк">
+                <svg class="chat-like-ico" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
                 </svg>
                 ${likeCount > 0 ? `<span class="chat-like-count">${likeCount}</span>` : ``}
               </button>
@@ -801,11 +841,18 @@ function initChat(){
     const likeBtn = e.target && e.target.closest ? e.target.closest(".chat-like-btn") : null;
     if(likeBtn){
       e.preventDefault();
+      const id = likeBtn.dataset.id;
+      if(id){
+        pulseUntilById.set(id, Date.now() + 520);
+      }
       likeBtn.classList.remove("pulse");
       void likeBtn.offsetWidth;
       likeBtn.classList.add("pulse");
-      setTimeout(() => likeBtn.classList.remove("pulse"), 320);
-      toggleLike(likeBtn.dataset.id);
+      setTimeout(() => {
+        likeBtn.classList.remove("pulse");
+        if(id) pulseUntilById.delete(id);
+      }, 520);
+      toggleLike(id);
       return;
     }
 
