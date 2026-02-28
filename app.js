@@ -23,6 +23,7 @@ const USER_NAME_KEY = "stoplist_user_name";
 const IOS_INSTALL_DISMISSED_KEY = "iphone_install_prompt_dismissed";
 const ANDROID_INSTALL_DISMISSED_KEY = "android_install_prompt_dismissed";
 const NEW_ITEM_NOTIFICATIONS_KEY = "new_item_notifications_enabled";
+const FCM_VAPID_KEY = "BJZ5GUE1xVHehU4Mx1e9XX-6GFtFK7YL1i52rtA80ki-fW0KCslTcWS3hxj_mIci0L1fnQH_ykENBMSznD4LGE4";
 let currentUser = requestUserNameOnStart();
 let deferredInstallPrompt = null;
 
@@ -64,6 +65,10 @@ function storageSet(key, value){
   } catch (e) {
     // ignore storage errors in private mode
   }
+}
+
+function encodeDbKey(value){
+  return encodeURIComponent(value).replace(/\./g, "%2E");
 }
 
 function requestUserNameOnStart(){
@@ -154,7 +159,10 @@ async function requestNotificationPermission(){
   if(!("Notification" in window)) return;
   try {
     const permission = await Notification.requestPermission();
-    if(permission === "granted") storageSet(NEW_ITEM_NOTIFICATIONS_KEY, "1");
+    if(permission === "granted"){
+      storageSet(NEW_ITEM_NOTIFICATIONS_KEY, "1");
+      initFcmToken();
+    }
   } catch (e) {
     // ignore permission errors
   }
@@ -165,6 +173,7 @@ function initNotificationPermissionAuto(){
 
   if(Notification.permission === "granted"){
     storageSet(NEW_ITEM_NOTIFICATIONS_KEY, "1");
+    initFcmToken();
     return;
   }
 
@@ -175,6 +184,44 @@ function initNotificationPermissionAuto(){
   };
 
   window.addEventListener("pointerdown", askOnFirstGesture, { once: true, passive: true });
+}
+
+async function initFcmToken(){
+  if(!FCM_VAPID_KEY) return;
+  if(!("Notification" in window) || Notification.permission !== "granted") return;
+  if(!("serviceWorker" in navigator)) return;
+  if(!firebase.messaging) return;
+
+  try {
+    const messaging = firebase.messaging();
+    const registration = await navigator.serviceWorker.ready;
+    const token = await messaging.getToken({
+      vapidKey: FCM_VAPID_KEY,
+      serviceWorkerRegistration: registration
+    });
+    if(!token) return;
+
+    const key = encodeDbKey(token);
+    await db.ref(`pushTokens/${key}`).set({
+      token,
+      user: currentUser,
+      platform: navigator.userAgent || "",
+      updatedAt: firebase.database.ServerValue.TIMESTAMP
+    });
+
+    messaging.onMessage(payload => {
+      if(Notification.permission !== "granted") return;
+      const title = payload?.notification?.title || "Стоп лист";
+      const body = payload?.notification?.body || "Новое уведомление";
+      new Notification(title, {
+        body,
+        icon: "./app-icon-512.png",
+        badge: "./app-icon-512.png"
+      });
+    });
+  } catch (e) {
+    // ignore FCM initialization errors
+  }
 }
 
 function notifyNewItem(secKey, item){

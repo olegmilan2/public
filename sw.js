@@ -11,6 +11,32 @@ const APP_SHELL = [
   "./apple-touch-icon.png"
 ];
 
+importScripts("https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js");
+importScripts("https://www.gstatic.com/firebasejs/9.23.0/firebase-messaging-compat.js");
+
+firebase.initializeApp({
+  apiKey: "AIzaSyA8VJCylVRlIXgMKZlHWe8pAmu9ZslEPmk",
+  authDomain: "check-c1174.firebaseapp.com",
+  projectId: "check-c1174",
+  storageBucket: "check-c1174.firebasestorage.app",
+  messagingSenderId: "620822198863",
+  appId: "1:620822198863:web:ab8954aa72bd6cafc1483a",
+  measurementId: "G-QWRB5L1N94",
+  databaseURL: "https://check-c1174-default-rtdb.firebaseio.com/"
+});
+
+const messaging = firebase.messaging();
+messaging.onBackgroundMessage(payload => {
+  const title = payload?.notification?.title || "Стоп лист";
+  const options = {
+    body: payload?.notification?.body || "Новое уведомление",
+    icon: "./app-icon-512.png",
+    badge: "./app-icon-512.png",
+    data: payload?.data || {}
+  };
+  self.registration.showNotification(title, options);
+});
+
 self.addEventListener("install", event => {
   event.waitUntil(
     caches.open(CACHE_NAME).then(cache => cache.addAll(APP_SHELL))
