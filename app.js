@@ -72,11 +72,16 @@ function isAndroidChrome(){
   return /Android/i.test(ua) && /Chrome\//i.test(ua) && !/EdgA|OPR|SamsungBrowser|UCBrowser|YaBrowser/i.test(ua);
 }
 
-function openCurrentInSafari(){
+async function openCurrentInSafari(){
   const href = window.location.href;
-  if(!/^https?:\/\//i.test(href)) return;
-  const safariSchemeUrl = href.replace(/^https?:\/\//i, match => `x-safari-${match}`);
-  window.location.href = safariSchemeUrl;
+  try {
+    if(navigator.clipboard && window.isSecureContext){
+      await navigator.clipboard.writeText(href);
+    }
+  } catch (e) {
+    // ignore clipboard failures
+  }
+  alert("iOS не дает открыть Safari автоматически.\nСсылка скопирована.\nОткройте Safari и вставьте ссылку.");
 }
 
 async function installViaChrome(){
@@ -121,6 +126,7 @@ function initIphoneInstallPrompt(){
   } else {
     actionsEl.classList.remove("hide");
     openSafariEl.classList.remove("hide");
+    openSafariEl.textContent = "Скопировать ссылку для Safari";
     stepsEl.textContent = "Open via Safari, then Tap Share → Add to Home Screen";
   }
 
