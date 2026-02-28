@@ -568,10 +568,16 @@ function initChat(){
   const formEl = document.getElementById("chat-form");
   const inputEl = document.getElementById("chat-input");
   const sendEl = document.getElementById("chat-send");
+  const replyEl = document.getElementById("chat-reply");
+  const replyMetaEl = document.getElementById("chat-reply-meta");
+  const replySnippetEl = document.getElementById("chat-reply-snippet");
+  const replyCancelEl = document.getElementById("chat-reply-cancel");
   if(!listEl || !formEl || !inputEl || !sendEl) return;
 
   const likeKey = encodeDbKey(currentUser || "Без имени");
   const ref = db.ref("chat/messages").orderByChild("ts").limitToLast(200);
+  let currentReply = null;
+  const messageIndex = new Map();
 
   function shouldStickToBottom(){
     const delta = listEl.scrollHeight - listEl.scrollTop - listEl.clientHeight;
@@ -580,6 +586,37 @@ function initChat(){
 
   function scrollToBottom(){
     listEl.scrollTop = listEl.scrollHeight;
+  }
+
+  function sanitizeSnippet(text){
+    return String(text || "").replace(/\s+/g, " ").trim().slice(0, 140);
+  }
+
+  function clearReply(){
+    currentReply = null;
+    if(replyEl) replyEl.hidden = true;
+    if(replyMetaEl) replyMetaEl.textContent = "";
+    if(replySnippetEl) replySnippetEl.textContent = "";
+    inputEl.placeholder = "Сообщение";
+  }
+
+  function setReplyTo(messageId){
+    const msg = messageIndex.get(messageId);
+    if(!msg) return;
+    currentReply = {
+      id: msg.id,
+      user: msg.user || "Без имени",
+      text: sanitizeSnippet(msg.text)
+    };
+    if(replyMetaEl) replyMetaEl.textContent = `Ответ: ${currentReply.user}`;
+    if(replySnippetEl) replySnippetEl.textContent = currentReply.text || "…";
+    if(replyEl) replyEl.hidden = false;
+    inputEl.placeholder = "Ответ...";
+    inputEl.focus();
+  }
+
+  if(replyCancelEl){
+    replyCancelEl.addEventListener("click", clearReply);
   }
 
   ref.on("value", snapshot => {
@@ -591,10 +628,14 @@ function initChat(){
         text: String(msg?.text || ""),
         user: String(msg?.user || ""),
         ts: Number(msg?.ts || 0),
-        likes: (msg?.likes && typeof msg.likes === "object") ? msg.likes : null
+        likes: (msg?.likes && typeof msg.likes === "object") ? msg.likes : null,
+        reply: (msg?.reply && typeof msg.reply === "object") ? msg.reply : null
       }))
       .filter(m => m.text.trim())
       .sort((a, b) => a.ts - b.ts);
+
+    messageIndex.clear();
+    messages.forEach(m => messageIndex.set(m.id, m));
 
     if(!messages.length){
       listEl.innerHTML = `<div class="chat-empty">Пока нет сообщений. Напишите первое.</div>`;
@@ -610,9 +651,18 @@ function initChat(){
       const likesObj = (m.likes && typeof m.likes === "object") ? m.likes : {};
       const likeCount = Object.keys(likesObj).length;
       const liked = !!likesObj[likeKey];
+      const replyUser = m.reply && m.reply.user ? escapeHtml(String(m.reply.user)) : "";
+      const replyText = m.reply && m.reply.text ? escapeHtml(String(m.reply.text)) : "";
+      const replyId = m.reply && m.reply.id ? escapeHtml(String(m.reply.id)) : "";
       return `
         <div class="chat-msg ${mine ? "mine" : "other"}" data-id="${escapeHtml(m.id)}">
           <div class="chat-bubble">
+            ${replyUser || replyText ? `
+              <button class="chat-reply-block" type="button" data-reply-id="${replyId}" aria-label="Перейти к сообщению">
+                <div class="chat-reply-who">${replyUser ? `Ответ: ${replyUser}` : "Ответ"}</div>
+                <div class="chat-reply-quote">${replyText || "…"}</div>
+              </button>
+            ` : ``}
             <div class="chat-text">${safeText}</div>
             <div class="chat-footer">
               ${meta ? `<div class="chat-meta">${meta}</div>` : `<div></div>`}
@@ -657,6 +707,18 @@ function initChat(){
     toggleLike(btn.dataset.id);
   });
 
+  listEl.addEventListener("click", (e) => {
+    const btn = e.target && e.target.closest ? e.target.closest(".chat-reply-block") : null;
+    if(!btn) return;
+    const replyId = btn.dataset.replyId;
+    if(!replyId) return;
+    const node = Array.from(listEl.querySelectorAll(".chat-msg[data-id]")).find(el => el.dataset.id === replyId);
+    if(!node) return;
+    node.scrollIntoView({ block: "center", behavior: "smooth" });
+    node.classList.add("chat-highlight");
+    setTimeout(() => node.classList.remove("chat-highlight"), 900);
+  });
+
   formEl.addEventListener("submit", async (e) => {
     e.preventDefault();
     const text = String(inputEl.value || "").trim();
@@ -667,8 +729,10 @@ function initChat(){
       await db.ref("chat/messages").push({
         text,
         user: currentUser,
-        ts: firebase.database.ServerValue.TIMESTAMP
+        ts: firebase.database.ServerValue.TIMESTAMP,
+        ...(currentReply ? { reply: currentReply } : {})
       });
+      clearReply();
     } catch (err) {
       console.error("Chat send error:", err);
       alert("Не удалось отправить сообщение. Проверьте интернет/правила Firebase.");
@@ -684,14 +748,56 @@ function initChat(){
       listEl.scrollTop = listEl.scrollHeight;
     }, 50);
   });
+
+  // Long-press to reply (iOS-like). Avoids interfering with scroll.
+  let pressTimer = null;
+  let pressStartX = 0;
+  let pressStartY = 0;
+  let pressTargetId = null;
+  let pressed = false;
+
+  function clearPress(){
+    if(pressTimer){
+      clearTimeout(pressTimer);
+      pressTimer = null;
+    }
+    pressed = false;
+    pressTargetId = null;
+  }
+
+  listEl.addEventListener("pointerdown", (e) => {
+    if(e.button != null && e.button !== 0) return;
+    if(e.target && e.target.closest && e.target.closest("input, textarea, select, button")) return;
+    const msgEl = e.target && e.target.closest ? e.target.closest(".chat-msg[data-id]") : null;
+    if(!msgEl) return;
+
+    pressed = true;
+    pressStartX = e.clientX;
+    pressStartY = e.clientY;
+    pressTargetId = msgEl.dataset.id;
+    pressTimer = setTimeout(() => {
+      if(!pressed || !pressTargetId) return;
+      setReplyTo(pressTargetId);
+      try { window.navigator.vibrate && window.navigator.vibrate(8); } catch (err) { /* ignore */ }
+      clearPress();
+    }, 420);
+  }, { passive: true });
+
+  listEl.addEventListener("pointermove", (e) => {
+    if(!pressed) return;
+    const dx = e.clientX - pressStartX;
+    const dy = e.clientY - pressStartY;
+    if(Math.abs(dx) > 10 || Math.abs(dy) > 10){
+      clearPress();
+    }
+  }, { passive: true });
+
+  listEl.addEventListener("pointerup", clearPress, { passive: true });
+  listEl.addEventListener("pointercancel", clearPress, { passive: true });
 }
 
 function initPullToRefresh(){
-  const indicator = document.getElementById("pull-refresh");
-  if(!indicator) return;
-
   const THRESHOLD = 110; // px
-  const MAX_PULL = 160;
   let startX = 0;
   let startY = 0;
   let active = false;
@@ -710,20 +816,10 @@ function initPullToRefresh(){
     return !!(target && target.closest && target.closest("input, textarea, select, button"));
   }
 
-  function setIndicator(pull){
-    const clamped = Math.min(MAX_PULL, Math.max(0, pull));
-    lastPull = clamped;
-    indicator.textContent = clamped >= THRESHOLD ? "Отпустите чтобы обновить" : "Потяните вниз чтобы обновить";
-    indicator.style.transform = `translate(-50%, ${Math.min(24, clamped / 6)}px)`;
-  }
-
   function reset(){
     active = false;
     pulling = false;
     lastPull = 0;
-    document.body.classList.remove("pulling-refresh");
-    indicator.style.transform = "";
-    indicator.textContent = "Потяните вниз чтобы обновить";
   }
 
   document.addEventListener("touchstart", (e) => {
@@ -757,8 +853,7 @@ function initPullToRefresh(){
     }
 
     pulling = true;
-    document.body.classList.add("pulling-refresh");
-    setIndicator(dy);
+    lastPull = dy;
 
     // Avoid browser-native pull-to-refresh when we handle it.
     e.preventDefault();

@@ -33,7 +33,6 @@
 
 </head>
 <body>
-<div id="pull-refresh" class="pull-refresh" aria-hidden="true">Потяните вниз чтобы обновить</div>
 <div id="splash-screen" class="splash-screen" aria-hidden="true">
   <div class="splash-card">
     <img src="apple-touch-icon.png" alt="" class="splash-icon">
@@ -131,6 +130,13 @@
   <main id="view-chat" class="view" hidden role="tabpanel" aria-labelledby="tab-chat">
     <section class="chat-card" aria-label="Чат">
       <div id="chat-messages" class="chat-messages" aria-live="polite"></div>
+      <div id="chat-reply" class="chat-reply" hidden>
+        <div class="chat-reply-text">
+          <div id="chat-reply-meta" class="chat-reply-meta"></div>
+          <div id="chat-reply-snippet" class="chat-reply-snippet"></div>
+        </div>
+        <button id="chat-reply-cancel" class="chat-reply-cancel" type="button" aria-label="Отменить ответ">×</button>
+      </div>
       <form id="chat-form" class="chat-form" autocomplete="off">
         <input id="chat-input" class="chat-input" placeholder="Сообщение" maxlength="600">
         <button id="chat-send" class="chat-send" type="submit" aria-label="Отправить">
