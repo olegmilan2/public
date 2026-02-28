@@ -420,6 +420,156 @@ async function updateHeaderWeather(){
   }
 }
 
+// ===== Рейтинг и статистика =====
+const RATING_LIMIT = 20;
+
+function normalizeItemName(name){
+  return String(name || "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .replace(/ё/g, "е");
+}
+
+function escapeHtml(value){
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/\"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+function ratingItemKey(name){
+  return encodeDbKey(normalizeItemName(name));
+}
+
+async function incrementSimpleCounter(path){
+  await db.ref(path).transaction(current => Number(current || 0) + 1);
+}
+
+async function incrementStatsOnAdd(secKey){
+  await Promise.all([
+    incrementSimpleCounter("stats/added/total"),
+    incrementSimpleCounter(`stats/added/bySection/${secKey}`)
+  ]);
+}
+
+async function incrementRatingOnAdd(secKey, rawName){
+  const displayName = String(rawName || "").trim();
+  const normalizedName = normalizeItemName(rawName);
+  if(!normalizedName) return;
+  const key = ratingItemKey(rawName);
+  const ref = db.ref(`ratingItems/${key}`);
+
+  await ref.transaction(current => {
+    const prev = current || {};
+    const prevCount = Number(prev.count || 0);
+    const prevBySection = (prev.bySection && typeof prev.bySection === "object") ? prev.bySection : {};
+    const nextSectionCount = Number(prevBySection[secKey] || 0) + 1;
+
+    return {
+      name: displayName || prev.name || normalizedName,
+      normalizedName,
+      count: prevCount + 1,
+      bySection: {
+        ...prevBySection,
+        [secKey]: nextSectionCount
+      },
+      lastAddedAt: Date.now(),
+      lastAddedBy: currentUser
+    };
+  });
+
+  await incrementStatsOnAdd(secKey);
+}
+
+function renderRatingSummary(stats){
+  const el = document.getElementById("rating-summary");
+  if(!el) return;
+
+  const total = Number(stats?.total || 0);
+  const bySection = stats?.bySection || {};
+  const parts = [];
+  sections.forEach(sec => {
+    const n = Number(bySection?.[sec.key] || 0);
+    if(n > 0) parts.push(`${sec.name}: ${n}`);
+  });
+
+  if(total <= 0){
+    el.textContent = "";
+    return;
+  }
+
+  const bySectionLabel = parts.length ? ` • ${parts.join(" • ")}` : "";
+  el.textContent = `Добавлений всего: ${total}${bySectionLabel}`;
+}
+
+function renderRatingList(items){
+  const listEl = document.getElementById("rating-list");
+  if(!listEl) return;
+
+  if(!items.length){
+    listEl.innerHTML = `<div class="rating-empty">Пока нет данных. Добавьте позицию в стоп лист, и она появится в рейтинге.</div>`;
+    return;
+  }
+
+  listEl.innerHTML = items.map((item, index) => {
+    const name = item.name || item.normalizedName || "Без названия";
+    const count = Number(item.count || 0);
+    const bySection = item.bySection || {};
+    const metaParts = [];
+    sections.forEach(sec => {
+      const n = Number(bySection?.[sec.key] || 0);
+      if(n > 0) metaParts.push(`${sec.name}: ${n}`);
+    });
+    const meta = metaParts.join(" • ");
+    const safeName = escapeHtml(name);
+    const safeMeta = escapeHtml(meta);
+
+    return `
+      <div class="rating-row">
+        <div class="rating-left">
+          <div class="rating-rank">#${index + 1}</div>
+          <div class="rating-text">
+            <div class="rating-name">${safeName}</div>
+            <div class="rating-meta">${safeMeta}</div>
+          </div>
+        </div>
+        <div class="rating-count">${count}</div>
+      </div>
+    `;
+  }).join("");
+}
+
+function initRating(){
+  const listEl = document.getElementById("rating-list");
+  if(!listEl) return;
+
+  db.ref("ratingItems")
+    .orderByChild("count")
+    .limitToLast(RATING_LIMIT)
+    .on("value", snapshot => {
+      const data = snapshot.val() || {};
+      const items = Object.values(data)
+        .filter(item => item && typeof item === "object")
+        .map(item => ({
+          name: item.name,
+          normalizedName: item.normalizedName,
+          count: Number(item.count || 0),
+          bySection: item.bySection || {}
+        }))
+        .filter(item => item.count > 0)
+        .sort((a, b) => b.count - a.count);
+
+      renderRatingList(items);
+    });
+
+  db.ref("stats/added").on("value", snapshot => {
+    renderRatingSummary(snapshot.val() || {});
+  });
+}
+
 // ===== Рендер =====
 function renderSection(secKey, data){
   const box=document.getElementById(secKey+"-box");
@@ -505,65 +655,8 @@ function loadData(secKey){
       db.ref(secKey).update(defaultItems[secKey]);
       return;
     }
-    ensureRatingTracked(secKey, data);
     ensureOutSince(secKey, data);
     renderSection(secKey, data);
-  });
-}
-
-function normalizeDishKey(name){
-  return String(name || "")
-    .trim()
-    .toLowerCase()
-    .replace(/\s+/g, " ");
-}
-
-function increaseRating(name){
-  const dishName = String(name || "").trim();
-  if(!dishName) return;
-  const key = encodeDbKey(normalizeDishKey(dishName));
-  const ref = db.ref(`rating/${key}`);
-  ref.transaction(current => {
-    const prev = current || {};
-    return {
-      name: prev.name || dishName,
-      count: Number(prev.count || 0) + 1,
-      totalOutMs: Number(prev.totalOutMs || 0)
-    };
-  }).catch(err => {
-    console.error("Rating update error:", err);
-  });
-}
-
-function ensureRatingTracked(secKey, data){
-  if(secKey !== "bar" && secKey !== "kitchen") return;
-  for(const id in data){
-    const item = data[id];
-    if(!item || !item.name) continue;
-    if(item.ratingTracked === true) continue;
-
-    increaseRating(item.name);
-    db.ref(`${secKey}/${id}/ratingTracked`).set(true);
-  }
-}
-
-function addOutDurationToRating(name, durationMs){
-  const dishName = String(name || "").trim();
-  if(!dishName) return;
-  const safeDuration = Math.max(0, Number(durationMs || 0));
-  if(!safeDuration) return;
-
-  const key = encodeDbKey(normalizeDishKey(dishName));
-  const ref = db.ref(`rating/${key}`);
-  ref.transaction(current => {
-    const prev = current || {};
-    return {
-      name: prev.name || dishName,
-      count: Number(prev.count || 0),
-      totalOutMs: Number(prev.totalOutMs || 0) + safeDuration
-    };
-  }).catch(err => {
-    console.error("Rating duration update error:", err);
   });
 }
 
@@ -575,15 +668,7 @@ function changeQty(secKey,id,value){
   });
 }
 async function setStatus(secKey,id,status){
-  const ref = db.ref(`${secKey}/${id}`);
-  const snap = await ref.once("value");
-  const item = snap.val() || {};
-
-  if(item.status === "out" && status === "ok" && item.outSince){
-    addOutDurationToRating(item.name, Date.now() - Number(item.outSince));
-  }
-
-  ref.update({
+  db.ref(`${secKey}/${id}`).update({
     status,
     outSince: status==="out" ? firebase.database.ServerValue.TIMESTAMP : null,
     statusBy: currentUser,
@@ -596,38 +681,42 @@ function toggleStatus(secKey,id,isChecked){
 }
 async function deleteItem(secKey,id){
   if(!confirm("Удалить позицию?")) return;
-  const ref = db.ref(`${secKey}/${id}`);
-  const snap = await ref.once("value");
-  const item = snap.val() || {};
-  if(item.status === "out" && item.outSince){
-    addOutDurationToRating(item.name, Date.now() - Number(item.outSince));
-  }
-  ref.remove();
+  db.ref(`${secKey}/${id}`).remove();
 }
 
 // ===== Добавление =====
-function addItem(secKey){
+async function addItem(secKey){
   const nameEl = document.getElementById(secKey+"-name");
   const name = nameEl.value.trim();
   if(!name) return;
   let type = "unit";
   if(secKey==="bar") type = document.getElementById(secKey+"-type").value;
 
-  db.ref(secKey).push({
-    name:name,
-    qty:0,
-    status:"out",
-    outSince: firebase.database.ServerValue.TIMESTAMP,
-    statusBy: currentUser,
-    statusAt: firebase.database.ServerValue.TIMESTAMP,
-    createdBy: currentUser,
-    createdAt: firebase.database.ServerValue.TIMESTAMP,
-    ratingTracked: true,
-    ...actorMeta(),
-    type:type
-  });
-  increaseRating(name);
-  nameEl.value="";
+  try {
+    await db.ref(secKey).push({
+      name:name,
+      qty:0,
+      status:"out",
+      outSince: firebase.database.ServerValue.TIMESTAMP,
+      statusBy: currentUser,
+      statusAt: firebase.database.ServerValue.TIMESTAMP,
+      createdBy: currentUser,
+      createdAt: firebase.database.ServerValue.TIMESTAMP,
+      ...actorMeta(),
+      type:type
+    });
+    try {
+      await incrementRatingOnAdd(secKey, name);
+    } catch (e) {
+      console.warn("Rating/stats update failed:", e);
+    }
+  } catch (err) {
+    console.error("Add item error:", err);
+    alert("Ошибка сохранения. Проверьте интернет/правила Firebase.");
+    return;
+  } finally {
+    nameEl.value="";
+  }
 }
 
 async function clearStopListWithPassword(){
@@ -715,3 +804,4 @@ initAndroidInstallPrompt();
 updateDeviceInfo();
 initNewItemNotifications();
 initDangerActions();
+initRating();

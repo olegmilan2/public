@@ -36,7 +36,6 @@
     <div id="header-weather" class="header-weather" aria-live="polite">Одесса: загрузка погоды и воды...</div>
     <div class="header-actions">
       <button id="clear-stop-list" class="clear-stop-list-btn" type="button">Удалить стоп лист</button>
-      <a class="rating-link-btn" href="rating.html">Рейтинг стоп листа</a>
     </div>
     <div id="deviceInfo"
       style="
@@ -98,6 +97,11 @@
     </script>
   </header>
   <main id="app"></main>
+  <section class="rating-section" aria-live="polite">
+    <h2 class="rating-title">Рейтинг стоп листа</h2>
+    <div id="rating-summary" class="rating-summary"></div>
+    <div id="rating-list" class="rating-list"></div>
+  </section>
 </div>
 <aside id="iphone-install-prompt" class="ios-install-prompt" aria-live="polite" aria-label="Install app prompt for iPhone">
   <button id="iphone-install-close" class="ios-install-close" type="button" aria-label="Close iPhone install prompt">×</button>
