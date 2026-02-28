@@ -22,8 +22,19 @@ const defaultItems = {};
 const USER_NAME_KEY = "stoplist_user_name";
 const IOS_INSTALL_DISMISSED_KEY = "iphone_install_prompt_dismissed";
 const ANDROID_INSTALL_DISMISSED_KEY = "android_install_prompt_dismissed";
+const NEW_ITEM_NOTIFICATIONS_KEY = "new_item_notifications_enabled";
 let currentUser = requestUserNameOnStart();
 let deferredInstallPrompt = null;
+
+function hideSplashScreen(){
+  const splash = document.getElementById("splash-screen");
+  if(!splash || splash.classList.contains("hide")) return;
+  splash.classList.add("hide");
+  document.body.classList.remove("splash-open");
+  setTimeout(() => {
+    splash.remove();
+  }, 460);
+}
 
 if("serviceWorker" in navigator){
   window.addEventListener("load", () => {
@@ -32,6 +43,12 @@ if("serviceWorker" in navigator){
     });
   });
 }
+
+window.addEventListener("load", () => {
+  setTimeout(hideSplashScreen, 620);
+}, { once: true });
+
+setTimeout(hideSplashScreen, 2600);
 
 function storageGet(key){
   try {
@@ -126,6 +143,76 @@ function showInstallPrompt(promptEl){
   setTimeout(() => {
     promptEl.classList.add("show");
   }, 800);
+}
+
+function getSectionName(secKey){
+  const sec = sections.find(item => item.key === secKey);
+  return sec ? sec.name : secKey;
+}
+
+async function requestNotificationPermission(){
+  if(!("Notification" in window)) return;
+  try {
+    const permission = await Notification.requestPermission();
+    if(permission === "granted") storageSet(NEW_ITEM_NOTIFICATIONS_KEY, "1");
+  } catch (e) {
+    // ignore permission errors
+  }
+}
+
+function initNotificationPermissionAuto(){
+  if(!("Notification" in window)) return;
+
+  if(Notification.permission === "granted"){
+    storageSet(NEW_ITEM_NOTIFICATIONS_KEY, "1");
+    return;
+  }
+
+  if(Notification.permission !== "default") return;
+
+  const askOnFirstGesture = () => {
+    requestNotificationPermission();
+  };
+
+  window.addEventListener("pointerdown", askOnFirstGesture, { once: true, passive: true });
+}
+
+function notifyNewItem(secKey, item){
+  if(!("Notification" in window)) return;
+  if(Notification.permission !== "granted") return;
+  if(storageGet(NEW_ITEM_NOTIFICATIONS_KEY) !== "1") return;
+
+  const title = "Новая позиция";
+  const body = `${getSectionName(secKey)}: ${item.name || "Без названия"}`;
+  try {
+    new Notification(title, {
+      body,
+      icon: "./app-icon-512.png",
+      badge: "./app-icon-512.png"
+    });
+  } catch (e) {
+    // ignore notification errors
+  }
+}
+
+function initNewItemNotifications(){
+  initNotificationPermissionAuto();
+
+  sections.forEach(sec => {
+    let initialLoaded = false;
+    const ref = db.ref(sec.key);
+
+    ref.once("value", () => {
+      initialLoaded = true;
+    });
+
+    ref.on("child_added", snapshot => {
+      if(!initialLoaded) return;
+      const item = snapshot.val() || {};
+      if(item.createdBy && item.createdBy === currentUser) return;
+      notifyNewItem(sec.key, item);
+    });
+  });
 }
 
 function initIphoneInstallPrompt(){
@@ -467,3 +554,4 @@ window.addEventListener("appinstalled", () => {
 initIphoneInstallPrompt();
 initAndroidInstallPrompt();
 updateDeviceInfo();
+initNewItemNotifications();

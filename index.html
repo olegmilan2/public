@@ -21,7 +21,13 @@
 <script src="app.js" defer></script>
 
 </head>
-<body>
+<body class="splash-open">
+<div id="splash-screen" class="splash-screen" aria-hidden="true">
+  <div class="splash-card">
+    <img src="apple-touch-icon.png" alt="" class="splash-icon">
+    <div class="splash-title">Стоп лист</div>
+  </div>
+</div>
 <div class="layout">
   <header class="page-header">
     <h1>Стоп лист</h1>
@@ -34,31 +40,53 @@
       left:10px;
       background:black;
       color:white;
-      padding:10px;
-      border-radius:10px;
-      z-index:9999;">
+      padding:6px 8px;
+      border-radius:8px;
+      font-size:11px;
+      line-height:1.2;
+      z-index:9999;
+      opacity:0.92;
+      transition:opacity .5s ease;">
       Определение устройства...
     </div>
     <script>
+      function detectBrowser(ua) {
+        if (/Edg/i.test(ua)) return "Edge";
+        if (/OPR|Opera/i.test(ua)) return "Opera";
+        if (/CriOS|Chrome/i.test(ua)) return "Chrome";
+        if (/FxiOS|Firefox/i.test(ua)) return "Firefox";
+        if (/Safari/i.test(ua)) return "Safari";
+        return "Неизвестный браузер";
+      }
+
       function detectDevice() {
         const ua = navigator.userAgent || "";
         const isIOS = /iPhone|iPad|iPod/i.test(ua);
+        const isAndroid = /Android/i.test(ua);
         const isSafari = /Safari/i.test(ua) && !/CriOS|FxiOS|EdgiOS|OPiOS/i.test(ua);
         const isStandalone = window.navigator.standalone === true || window.matchMedia("(display-mode: standalone)").matches;
+        const browser = detectBrowser(ua);
         let result = "";
 
         if (isStandalone) {
-          result = "✅ Запущено как приложение (APP mode)";
+          result = "✅ APP mode";
         } else if (isIOS && isSafari) {
-          result = "📱 iPhone Safari (можно установить как APP)";
+          result = "📱 iPhone • Safari";
         } else if (isIOS && !isSafari) {
-          result = "📱 iPhone, но НЕ Safari (Google/Chrome)";
+          result = `📱 iPhone • ${browser}`;
+        } else if (isAndroid) {
+          result = `🤖 Android • ${browser}`;
         } else {
-          result = "💻 ПК или Android";
+          result = `💻 ПК • ${browser}`;
         }
 
         const el = document.getElementById("deviceInfo");
-        if (el) el.innerText = result;
+        if (!el) return;
+        el.innerText = result;
+        setTimeout(() => {
+          el.style.opacity = "0";
+          setTimeout(() => { el.style.display = "none"; }, 520);
+        }, 5000);
       }
 
       detectDevice();

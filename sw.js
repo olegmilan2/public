@@ -1,7 +1,8 @@
-const CACHE_NAME = "stoplist-shell-v3";
+const CACHE_NAME = "stoplist-shell-v4";
 const APP_SHELL = [
   "./",
   "./index.html",
+  "./offline.html",
   "./styles.css",
   "./app.js",
   "./manifest.json",
@@ -35,14 +36,38 @@ self.addEventListener("fetch", event => {
   const url = new URL(event.request.url);
   if(url.origin !== self.location.origin) return;
 
+  // Navigation requests: try network first, fallback to cache/offline page.
+  if(event.request.mode === "navigate"){
+    event.respondWith(
+      fetch(event.request)
+        .then(response => {
+          const clone = response.clone();
+          caches.open(CACHE_NAME).then(cache => cache.put(event.request, clone));
+          return response;
+        })
+        .catch(async () => {
+          const cachedPage = await caches.match(event.request);
+          if(cachedPage) return cachedPage;
+          const fallback = await caches.match("./offline.html");
+          if(fallback) return fallback;
+          return new Response("Offline", { status: 503, statusText: "Offline" });
+        })
+    );
+    return;
+  }
+
+  // Static assets: cache first with background refresh.
   event.respondWith(
     caches.match(event.request).then(cached => {
-      if(cached) return cached;
-      return fetch(event.request).then(response => {
-        const clone = response.clone();
-        caches.open(CACHE_NAME).then(cache => cache.put(event.request, clone));
-        return response;
-      });
+      const networkFetch = fetch(event.request)
+        .then(response => {
+          const clone = response.clone();
+          caches.open(CACHE_NAME).then(cache => cache.put(event.request, clone));
+          return response;
+        })
+        .catch(() => cached);
+
+      return cached || networkFetch;
     })
   );
 });
