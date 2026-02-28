@@ -198,6 +198,32 @@ body {
   background: var(--app-bg);
 }
 
+/* Pull-to-refresh indicator (custom reload gesture). */
+.pull-refresh {
+  position: fixed;
+  top: calc(8px + env(safe-area-inset-top));
+  left: 50%;
+  transform: translate(-50%, -18px);
+  opacity: 0;
+  z-index: 16000;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--surface) 78%, transparent);
+  border: 1px solid var(--panel-border);
+  -webkit-backdrop-filter: blur(14px) saturate(140%);
+  backdrop-filter: blur(14px) saturate(140%);
+  box-shadow: 0 14px 26px rgba(0, 0, 0, 0.24);
+  font: 800 10px/1.1 "Manrope", "Segoe UI", sans-serif;
+  color: var(--text);
+  pointer-events: none;
+  transition: opacity 0.18s ease, transform 0.18s ease;
+}
+
+body.pulling-refresh .pull-refresh {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+
 body.splash-open {
   overflow: hidden;
 }
@@ -351,6 +377,7 @@ h1 {
 
 #view-stoplist {
   overflow: auto;
+  overscroll-behavior-y: contain;
 }
 
 #view-chat {
@@ -419,6 +446,7 @@ h1 {
   display: grid;
   gap: 6px;
   -webkit-overflow-scrolling: touch;
+  overscroll-behavior-y: contain;
 }
 
 .chat-empty {
@@ -480,6 +508,8 @@ h1 {
 
 .chat-form {
   margin-top: 8px;
+  position: sticky;
+  bottom: calc(8px + env(safe-area-inset-bottom));
   display: flex;
   gap: 8px;
   align-items: flex-end;
@@ -1179,7 +1209,7 @@ select:focus {
   }
 
   .chat-input {
-    font-size: 11px;
+    font-size: 16px;
     padding: 7px 9px;
     border-radius: 13px;
   }
