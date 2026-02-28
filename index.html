@@ -119,38 +119,40 @@
       detectDevice();
     </script>
   </header>
-  <main id="view-stoplist" class="view" role="tabpanel" aria-labelledby="tab-stoplist">
-    <div id="app"></div>
-    <section class="rating-section" aria-live="polite">
-      <div class="rating-head">
-        <h2 class="rating-title">Рейтинг стоп листа</h2>
-        <button id="reset-rating" class="rating-reset-btn" type="button">Сбросить</button>
-      </div>
-      <div id="rating-summary" class="rating-summary"></div>
-      <div id="rating-list" class="rating-list"></div>
-    </section>
-  </main>
-  <main id="view-chat" class="view" hidden role="tabpanel" aria-labelledby="tab-chat">
-    <section class="chat-card" aria-label="Чат">
-      <div id="chat-messages" class="chat-messages" aria-live="polite"></div>
-      <div id="chat-reply" class="chat-reply" hidden>
-        <div class="chat-reply-text">
-          <div id="chat-reply-meta" class="chat-reply-meta"></div>
-          <div id="chat-reply-snippet" class="chat-reply-snippet"></div>
+  <div class="views" aria-label="Содержимое">
+    <main id="view-stoplist" class="view" role="tabpanel" aria-labelledby="tab-stoplist">
+      <div id="app"></div>
+      <section class="rating-section" aria-live="polite">
+        <div class="rating-head">
+          <h2 class="rating-title">Рейтинг стоп листа</h2>
+          <button id="reset-rating" class="rating-reset-btn" type="button">Сбросить</button>
         </div>
-        <button id="chat-reply-cancel" class="chat-reply-cancel" type="button" aria-label="Отменить ответ">×</button>
-      </div>
-      <form id="chat-form" class="chat-form" autocomplete="off">
-        <input id="chat-input" class="chat-input" placeholder="Сообщение" maxlength="600">
-        <button id="chat-send" class="chat-send" type="submit" aria-label="Отправить">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-            <path d="M4 12h15" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-            <path d="M13 5l7 7-7 7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-          </svg>
-        </button>
-      </form>
-    </section>
-  </main>
+        <div id="rating-summary" class="rating-summary"></div>
+        <div id="rating-list" class="rating-list"></div>
+      </section>
+    </main>
+    <main id="view-chat" class="view" hidden role="tabpanel" aria-labelledby="tab-chat">
+      <section class="chat-card" aria-label="Чат">
+        <div id="chat-messages" class="chat-messages" aria-live="polite"></div>
+        <div id="chat-reply" class="chat-reply" hidden>
+          <div class="chat-reply-text">
+            <div id="chat-reply-meta" class="chat-reply-meta"></div>
+            <div id="chat-reply-snippet" class="chat-reply-snippet"></div>
+          </div>
+          <button id="chat-reply-cancel" class="chat-reply-cancel" type="button" aria-label="Отменить ответ">×</button>
+        </div>
+        <form id="chat-form" class="chat-form" autocomplete="off">
+          <input id="chat-input" class="chat-input" placeholder="Сообщение" maxlength="600">
+          <button id="chat-send" class="chat-send" type="submit" aria-label="Отправить">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path d="M4 12h15" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+              <path d="M13 5l7 7-7 7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </button>
+        </form>
+      </section>
+    </main>
+  </div>
 </div>
 <aside id="iphone-install-prompt" class="ios-install-prompt" aria-live="polite" aria-label="Install app prompt for iPhone">
   <button id="iphone-install-close" class="ios-install-close" type="button" aria-label="Close iPhone install prompt">×</button>

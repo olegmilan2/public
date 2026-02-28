@@ -745,6 +745,10 @@ function initChat(){
     const likeBtn = e.target && e.target.closest ? e.target.closest(".chat-like-btn") : null;
     if(likeBtn){
       e.preventDefault();
+      likeBtn.classList.remove("pulse");
+      void likeBtn.offsetWidth;
+      likeBtn.classList.add("pulse");
+      setTimeout(() => likeBtn.classList.remove("pulse"), 320);
       toggleLike(likeBtn.dataset.id);
       return;
     }
