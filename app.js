@@ -27,6 +27,8 @@ const FCM_VAPID_KEY = "BJZ5GUE1xVHehU4Mx1e9XX-6GFtFK7YL1i52rtA80ki-fW0KCslTcWS3h
 let currentUser = requestUserNameOnStart();
 let deferredInstallPrompt = null;
 
+const SPLASH_SHOWN_KEY = "stoplist_splash_shown_session";
+
 function hideSplashScreen(){
   const splash = document.getElementById("splash-screen");
   if(!splash || splash.classList.contains("hide")) return;
@@ -37,6 +39,39 @@ function hideSplashScreen(){
   }, 460);
 }
 
+function shouldShowSplash(){
+  try {
+    if(sessionStorage.getItem(SPLASH_SHOWN_KEY) === "1") return false;
+    const nav = performance.getEntriesByType("navigation")[0];
+    if(nav && nav.type === "reload") return false;
+  } catch (e) {
+    // ignore
+  }
+  return true;
+}
+
+function showSplashScreen(){
+  const splash = document.getElementById("splash-screen");
+  if(!splash) return;
+
+  if(!shouldShowSplash()){
+    // No flash on refresh: remove immediately.
+    splash.remove();
+    return;
+  }
+
+  try {
+    sessionStorage.setItem(SPLASH_SHOWN_KEY, "1");
+  } catch (e) {
+    // ignore
+  }
+
+  splash.classList.add("show");
+  document.body.classList.add("splash-open");
+}
+
+showSplashScreen();
+
 if("serviceWorker" in navigator){
   window.addEventListener("load", () => {
     navigator.serviceWorker.register("./sw.js").catch(() => {
@@ -46,10 +81,10 @@ if("serviceWorker" in navigator){
 }
 
 window.addEventListener("load", () => {
+  const splash = document.getElementById("splash-screen");
+  if(!splash) return;
   setTimeout(hideSplashScreen, 620);
 }, { once: true });
-
-setTimeout(hideSplashScreen, 2600);
 
 function storageGet(key){
   try {

@@ -43,7 +43,7 @@ body.splash-open {
   position: fixed;
   inset: 0;
   z-index: 20000;
-  display: grid;
+  display: none;
   place-items: center;
   background:
     radial-gradient(1200px 500px at 20% -10%, #e8efff 0%, transparent 70%),
@@ -52,6 +52,10 @@ body.splash-open {
   opacity: 1;
   transform: translateY(0);
   transition: opacity 0.38s ease, transform 0.42s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.splash-screen.show {
+  display: grid;
 }
 
 .splash-screen.hide {
