@@ -356,8 +356,7 @@ h1 {
 }
 
 #view-stoplist {
-  overflow: auto;
-  overscroll-behavior-y: contain;
+  overflow: visible;
 }
 
 #view-chat {
