@@ -1260,10 +1260,35 @@ async function clearStopListWithPassword(){
   }
 }
 
+async function resetRatingWithPassword(){
+  const pass = prompt("Введите пароль для сброса рейтинга:");
+  if(pass === null) return;
+  if(pass.trim() !== "2"){
+    alert("Неверный пароль");
+    return;
+  }
+  if(!confirm("Сбросить рейтинг и статистику добавлений?")) return;
+
+  try {
+    await Promise.all([
+      db.ref("ratingItems").remove(),
+      db.ref("stats/added").remove()
+    ]);
+    alert("Рейтинг сброшен");
+  } catch (e) {
+    alert("Ошибка. Проверьте интернет/правила Firebase.");
+  }
+}
+
 function initDangerActions(){
   const clearBtn = document.getElementById("clear-stop-list");
   if(clearBtn){
     clearBtn.addEventListener("click", clearStopListWithPassword);
+  }
+
+  const resetRatingBtn = document.getElementById("reset-rating");
+  if(resetRatingBtn){
+    resetRatingBtn.addEventListener("click", resetRatingWithPassword);
   }
 }
 

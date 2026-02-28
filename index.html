@@ -122,7 +122,10 @@
   <main id="view-stoplist" class="view" role="tabpanel" aria-labelledby="tab-stoplist">
     <div id="app"></div>
     <section class="rating-section" aria-live="polite">
-      <h2 class="rating-title">Рейтинг стоп листа</h2>
+      <div class="rating-head">
+        <h2 class="rating-title">Рейтинг стоп листа</h2>
+        <button id="reset-rating" class="rating-reset-btn" type="button">Сбросить</button>
+      </div>
       <div id="rating-summary" class="rating-summary"></div>
       <div id="rating-list" class="rating-list"></div>
     </section>
