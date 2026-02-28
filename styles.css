@@ -6,6 +6,7 @@
   --surface-soft: #2c2c2e;  /* iOS systemGray5 (dark) */
   --text: rgba(255, 255, 255, 0.96);
   --muted: rgba(235, 235, 245, 0.6);
+  --placeholder: rgba(235, 235, 245, 0.38);
   --border: rgba(255, 255, 255, 0.12);
   --primary: #0a84ff;       /* iOS systemBlue (dark) */
   --primary-hover: #409cff;
@@ -19,6 +20,9 @@
   --ok-border: rgba(48, 209, 88, 0.28);
   --out-bg: rgba(255, 69, 58, 0.14);
   --out-border: rgba(255, 69, 58, 0.28);
+  --timer-pill-bg: rgba(255, 255, 255, 0.08);
+  --timer-pill-border: rgba(255, 255, 255, 0.14);
+  --timer-pill-shadow: 0 10px 18px rgba(0, 0, 0, 0.16);
 
   --app-bg:
     radial-gradient(900px 340px at 20% 0%, rgba(10, 132, 255, 0.14) 0%, transparent 70%),
@@ -47,6 +51,8 @@
 
   --header-time: rgba(255, 255, 255, 0.92);
   --header-sub: rgba(235, 235, 245, 0.64);
+  --weather-pill-bg: rgba(10, 132, 255, 0.16);
+  --weather-pill-border: rgba(10, 132, 255, 0.26);
   --danger-soft-bg: rgba(255, 69, 58, 0.14);
   --danger-soft-border: rgba(255, 69, 58, 0.26);
   --danger-soft-text: rgba(255, 255, 255, 0.92);
@@ -109,6 +115,7 @@
   --surface-soft: #f6f7fb;
   --text: rgba(0, 0, 0, 0.92);
   --muted: rgba(60, 60, 67, 0.6);
+  --placeholder: rgba(60, 60, 67, 0.36);
   --border: rgba(60, 60, 67, 0.18);
   --primary: #007aff;       /* iOS systemBlue (light) */
   --primary-hover: #3395ff;
@@ -122,6 +129,9 @@
   --ok-border: #a7edc0;
   --out-bg: #fff1f1;
   --out-border: #f2b9b9;
+  --timer-pill-bg: rgba(255, 255, 255, 0.92);
+  --timer-pill-border: rgba(60, 60, 67, 0.14);
+  --timer-pill-shadow: 0 12px 18px rgba(15, 20, 35, 0.06);
 
   --app-bg:
     radial-gradient(900px 320px at 18% -5%, rgba(0, 122, 255, 0.08) 0%, transparent 72%),
@@ -150,6 +160,8 @@
 
   --header-time: rgba(0, 0, 0, 0.86);
   --header-sub: rgba(60, 60, 67, 0.6);
+  --weather-pill-bg: rgba(0, 122, 255, 0.12);
+  --weather-pill-border: rgba(0, 122, 255, 0.22);
   --danger-soft-bg: rgba(255, 59, 48, 0.12);
   --danger-soft-border: rgba(255, 59, 48, 0.22);
   --danger-soft-text: rgba(0, 0, 0, 0.86);
@@ -332,8 +344,56 @@ h1 {
 
 .header-weather {
   margin-top: 2px;
+  display: flex;
+  justify-content: center;
+  align-items: baseline;
+  gap: 6px;
+  flex-wrap: wrap;
   text-align: center;
   font: 600 11px/1.2 "Manrope", "Segoe UI", sans-serif;
+  color: var(--header-sub);
+}
+
+.weather-icon {
+  width: 22px;
+  height: 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  border: 1px solid var(--weather-pill-border);
+  background: var(--weather-pill-bg);
+  color: var(--primary);
+  box-shadow: 0 10px 18px rgba(0, 0, 0, 0.12);
+}
+
+:root[data-theme="light"] .weather-icon {
+  box-shadow: 0 10px 18px rgba(15, 20, 35, 0.06);
+}
+
+.weather-icon svg {
+  width: 14px;
+  height: 14px;
+  display: block;
+}
+
+.weather-city {
+  font-weight: 700;
+  color: var(--header-time);
+}
+
+.weather-sep {
+  opacity: 0.8;
+}
+
+.weather-temp {
+  font-weight: 800;
+  color: var(--header-time);
+  font-variant-numeric: tabular-nums;
+}
+
+.weather-rest {
+  font-weight: 600;
   color: var(--header-sub);
 }
 
@@ -409,7 +469,7 @@ h1 {
 .header-actions {
   margin-top: 6px;
   display: flex;
-  justify-content: center;
+  justify-content: flex-end;
   gap: 6px;
 }
 
@@ -1155,14 +1215,15 @@ button:active {
   line-height: 1.1;
   font-weight: 800;
   color: var(--danger);
-  background: var(--out-bg);
-  border: 1px solid var(--out-border);
+  background: var(--timer-pill-bg);
+  border: 1px solid var(--timer-pill-border);
   border-radius: 999px;
   padding: 5px 8px;
   width: fit-content;
   max-width: 100%;
   font-variant-numeric: tabular-nums;
   letter-spacing: 0.01em;
+  box-shadow: var(--timer-pill-shadow);
 }
 
 .timer.show {
@@ -1219,6 +1280,12 @@ select {
   font-size: 10px;
   outline: none;
   transition: border-color 0.18s ease, box-shadow 0.18s ease;
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: var(--placeholder);
+  opacity: 1;
 }
 
 /* iOS Safari: prevent auto-zoom on focus. */
@@ -1500,6 +1567,7 @@ select:focus {
   .header-actions {
     margin-top: 4px;
     gap: 4px;
+    justify-content: flex-end;
   }
 
   .header-tabs {

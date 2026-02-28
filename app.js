@@ -543,10 +543,20 @@ async function updateHeaderWeather(){
     const code = Number(current.weather_code);
     const seaTempRaw = Number(seaCurrent.sea_surface_temperature);
     const seaTemp = Number.isFinite(seaTempRaw) ? Math.round(seaTempRaw) : null;
-    const seaPart = seaTemp===null ? "" : `, вода в Черном море ${seaTemp}°C`;
-    el.textContent = `Одесса: ${temp}°C, ${weatherCodeToText(code)}, ветер ${wind} км/ч${seaPart}`;
+    const parts = [weatherCodeToText(code), `ветер ${wind} км/ч`];
+    if(seaTemp !== null) parts.push(`вода ${seaTemp}°C`);
+    const rest = parts.join(" • ");
+    const ico = `<svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M7 18h10a4 4 0 0 0 .2-8 6 6 0 0 0-11.7 1.3A3.7 3.7 0 0 0 7 18Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+    el.innerHTML = `
+      <span class="weather-icon" aria-hidden="true">${ico}</span>
+      <span class="weather-city">Одесса</span>
+      <span class="weather-sep">:</span>
+      <span class="weather-temp">${temp}°C</span>
+      <span class="weather-rest">${escapeHtml(rest)}</span>
+    `.trim().replace(/\s+/g, " ");
   } catch (e) {
-    el.textContent = "Одесса: погода/вода недоступны";
+    const ico = `<svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M7 18h10a4 4 0 0 0 .2-8 6 6 0 0 0-11.7 1.3A3.7 3.7 0 0 0 7 18Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+    el.innerHTML = `<span class="weather-icon" aria-hidden="true">${ico}</span><span class="weather-city">Одесса</span><span class="weather-sep">:</span><span class="weather-rest">погода/вода недоступны</span>`;
   }
 }
 
