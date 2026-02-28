@@ -893,6 +893,14 @@ select {
   transition: border-color 0.18s ease, box-shadow 0.18s ease;
 }
 
+/* iOS Safari: prevent auto-zoom on focus. */
+@media (max-width: 560px) {
+  input,
+  textarea {
+    font-size: 16px;
+  }
+}
+
 input:focus,
 select:focus {
   border-color: var(--focus-border);
