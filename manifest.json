@@ -1,8 +1,8 @@
 {
   "name": "Stop List",
   "short_name": "Stop List",
-  "start_url": "/",
-  "scope": "/",
+  "start_url": "./",
+  "scope": "./",
   "display": "standalone",
   "background_color": "#f6f7fb",
   "theme_color": "#f6f7fb",

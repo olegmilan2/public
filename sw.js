@@ -1,13 +1,13 @@
-const CACHE_NAME = "stoplist-shell-v2";
+const CACHE_NAME = "stoplist-shell-v3";
 const APP_SHELL = [
-  "/",
-  "/index.html",
-  "/styles.css",
-  "/app.js",
-  "/manifest.json",
-  "/app-icon-512.png",
-  "/app-icon-1024.png",
-  "/apple-touch-icon.png"
+  "./",
+  "./index.html",
+  "./styles.css",
+  "./app.js",
+  "./manifest.json",
+  "./app-icon-512.png",
+  "./app-icon-1024.png",
+  "./apple-touch-icon.png"
 ];
 
 self.addEventListener("install", event => {
