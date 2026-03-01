@@ -1336,7 +1336,7 @@ h1 {
 
 .line {
   display: grid;
-  grid-template-columns: minmax(100px, 2fr) auto auto auto auto;
+  grid-template-columns: minmax(100px, 2fr) auto auto;
   align-items: center;
   gap: 2px;
 }
@@ -1520,16 +1520,16 @@ textarea::placeholder {
 
   .add-form input,
   .add-form select {
-    height: 46px;
-    padding: 10px 12px;
+    height: 44px;
+    padding: 9px 12px;
     border-radius: 10px;
     font-size: 16px; /* avoids iOS Safari auto-zoom on focus */
     line-height: 1.2;
   }
 
   .btn-add {
-    min-height: 46px;
-    padding: 10px 14px;
+    min-height: 44px;
+    padding: 9px 14px;
     border-radius: 10px;
     font-size: 16px;
     font-weight: 800;
@@ -1940,15 +1940,14 @@ select:focus {
   }
 
   .line {
-    grid-template-columns: minmax(0, 1fr) auto auto auto;
+    grid-template-columns: minmax(0, 1fr) auto auto;
     grid-template-areas:
-      "name name name name"
-      "type qty status delete";
-    gap: 2px 3px;
+      "name name name"
+      "qty qty status";
+    gap: 2px 6px;
   }
 
   .name { grid-area: name; font-size: 12px; font-weight: 800; letter-spacing: -0.012em; line-height: 1.15; }
-  .type { grid-area: type; font-size: 8px; }
   .qty { grid-area: qty; }
   .status-check { grid-area: status; width: 14px; height: 14px; }
 

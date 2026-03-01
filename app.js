@@ -1724,16 +1724,13 @@ function renderSection(secKey, data){
     if(item.status!=="ok") div.classList.remove("ok");
     div.classList.remove("item-leave");
 
-    const typeLabel = secKey==="bar" ? (item.type==="portion"?"🥃 Порционно":"🧴 Бутылки") : "";
-    const step=item.type==="portion"?"0.01":"1";
     const safeName = escapeHtml(item.name || "");
 
 	    div.innerHTML=`
 	      <div class="item-swipe-content">
 	        <div class="line">
 	          <div class="name" title="Двойной клик: переименовать">${safeName}</div>
-	          <div class="type">${typeLabel}</div>
-	          <input class="qty" type="number" step="${step}" value="${item.qty}" onchange="changeQty('${secKey}','${id}',this.value)">
+	          <input class="qty" type="number" step="1" value="${item.qty}" onchange="changeQty('${secKey}','${id}',this.value)">
 	          <input class="status-check" type="checkbox" ${item.status==="ok"?"checked":""} onchange="toggleStatus('${secKey}','${id}',this.checked)" title="Есть в наличии">
 	        </div>
 	        <div class="timer ${item.status==="out"?"show":""}" data-out-since="${item.outSince || ""}">${getTimerLabel(item)}</div>
@@ -1843,8 +1840,6 @@ async function addItem(secKey){
   const nameEl = document.getElementById(secKey+"-name");
   const name = nameEl.value.trim();
   if(!name) return;
-  let type = "unit";
-  if(secKey==="bar") type = document.getElementById(secKey+"-type").value;
 
   try {
     await db.ref(secKey).push({
@@ -1856,8 +1851,7 @@ async function addItem(secKey){
       statusAt: firebase.database.ServerValue.TIMESTAMP,
       createdBy: currentUser,
       createdAt: firebase.database.ServerValue.TIMESTAMP,
-      ...actorMeta(),
-      type:type
+      ...actorMeta()
     });
     if(telegramEnabled){
       const safeUser = escapeHtml(currentUser);
@@ -1939,7 +1933,7 @@ function initDangerActions(){
 
 // ===== Инициализация UI =====
 const app=document.getElementById("app");
-sections.forEach(sec=>{
+	sections.forEach(sec=>{
   const box=document.createElement("div");
   box.className=`section section-${sec.key}`;
   box.innerHTML=`<h2 class="section-title">${sec.name}</h2><div id="${sec.key}-box" class="items-box"></div>`;
@@ -1947,17 +1941,12 @@ sections.forEach(sec=>{
 
   const addForm=document.createElement("div");
   addForm.className="add-form";
-  addForm.innerHTML=`
-    <div class="form-grid">
-      <input id="${sec.key}-name" placeholder="Название позиции">
-      ${sec.key==="bar"?`
-      <select id="${sec.key}-type">
-        <option value="bottle">🧴 Бутылки</option>
-        <option value="portion">🥃 Порционно</option>
-      </select>` : ""}
-    </div>
-    <button class="btn-add" onclick="addItem('${sec.key}')">Добавить позицию</button>
-  `;
+	  addForm.innerHTML=`
+	    <div class="form-grid">
+	      <input id="${sec.key}-name" placeholder="Название позиции">
+	    </div>
+	    <button class="btn-add" onclick="addItem('${sec.key}')">Добавить позицию</button>
+	  `;
   box.appendChild(addForm);
   const nameInput = addForm.querySelector(`#${sec.key}-name`);
   if(nameInput){
