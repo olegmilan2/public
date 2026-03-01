@@ -1604,10 +1604,31 @@ document.addEventListener("contextmenu", (e) => {
   if(!secKey || !id) return;
 
   e.preventDefault();
+
+  // If user right-clicked the name, offer rename instead of delete.
+  const clickedNameEl = t && t.closest ? t.closest(".name") : null;
+  if(clickedNameEl){
+    renameItem(secKey, id, clickedNameEl.textContent || "");
+    return;
+  }
+
   const nameEl = itemEl.querySelector ? itemEl.querySelector(".name") : null;
   const name = nameEl ? String(nameEl.textContent || "").trim() : "";
   if(!confirm(`Удалить позицию${name ? ` «${name}»` : ""}?`)) return;
   deleteItem(secKey, id);
+}, { passive: false });
+
+// Desktop UX: double click name to rename.
+document.addEventListener("dblclick", (e) => {
+  const nameEl = e.target && e.target.closest ? e.target.closest(".name") : null;
+  if(!nameEl) return;
+  const itemEl = nameEl.closest ? nameEl.closest(".item[data-id][data-sec-key]") : null;
+  if(!itemEl) return;
+  const secKey = itemEl.dataset.secKey;
+  const id = itemEl.dataset.id;
+  if(!secKey || !id) return;
+  e.preventDefault();
+  renameItem(secKey, id, nameEl.textContent || "");
 }, { passive: false });
 
 // ===== Рендер =====
@@ -1618,6 +1639,66 @@ function isCoarsePointerDevice(){
     return false;
   }
 }
+
+// Mobile UX: hold on name to rename.
+const RENAME_HOLD_MS = 520;
+const RENAME_HOLD_CANCEL_PX = 10;
+const renameHoldByPointerId = new Map();
+
+function cancelRenameHold(pointerId){
+  const state = renameHoldByPointerId.get(pointerId);
+  if(!state) return;
+  clearTimeout(state.timerId);
+  renameHoldByPointerId.delete(pointerId);
+  try { state.contentEl.classList.remove("rename-arming"); } catch (e) { /* ignore */ }
+}
+
+document.addEventListener("pointerdown", (e) => {
+  if(!isCoarsePointerDevice()) return;
+  if(e.button != null && e.button !== 0) return;
+  const nameEl = e.target && e.target.closest ? e.target.closest(".name") : null;
+  if(!nameEl) return;
+  const itemEl = nameEl.closest ? nameEl.closest(".item[data-id][data-sec-key]") : null;
+  if(!itemEl) return;
+  const secKey = itemEl.dataset.secKey;
+  const id = itemEl.dataset.id;
+  if(!secKey || !id) return;
+
+  const contentEl = itemEl.querySelector ? itemEl.querySelector(".item-swipe-content") : null;
+  if(contentEl) contentEl.classList.add("rename-arming");
+  try { itemEl.setPointerCapture(e.pointerId); } catch (err) { /* ignore */ }
+
+  e.preventDefault();
+  e.stopPropagation();
+
+  const startX = e.clientX;
+  const startY = e.clientY;
+  const t = setTimeout(() => {
+    renameHoldByPointerId.delete(e.pointerId);
+    if(contentEl) contentEl.classList.remove("rename-arming");
+    renameItem(secKey, id, nameEl.textContent || "");
+  }, RENAME_HOLD_MS);
+
+  renameHoldByPointerId.set(e.pointerId, { timerId: t, startX, startY, contentEl });
+}, { passive: false, capture: true });
+
+document.addEventListener("pointermove", (e) => {
+  const state = renameHoldByPointerId.get(e.pointerId);
+  if(!state) return;
+  const dx = e.clientX - state.startX;
+  const dy = e.clientY - state.startY;
+  if(Math.hypot(dx, dy) >= RENAME_HOLD_CANCEL_PX){
+    cancelRenameHold(e.pointerId);
+  }
+}, { passive: true });
+
+document.addEventListener("pointerup", (e) => {
+  cancelRenameHold(e.pointerId);
+}, { passive: true });
+
+document.addEventListener("pointercancel", (e) => {
+  cancelRenameHold(e.pointerId);
+}, { passive: true });
 
 function renderSection(secKey, data){
   const box=document.getElementById(secKey+"-box");
@@ -1645,11 +1726,12 @@ function renderSection(secKey, data){
 
     const typeLabel = secKey==="bar" ? (item.type==="portion"?"🥃 Порционно":"🧴 Бутылки") : "";
     const step=item.type==="portion"?"0.01":"1";
+    const safeName = escapeHtml(item.name || "");
 
 	    div.innerHTML=`
 	      <div class="item-swipe-content">
 	        <div class="line">
-	          <div class="name">${item.name}</div>
+	          <div class="name" title="Двойной клик: переименовать">${safeName}</div>
 	          <div class="type">${typeLabel}</div>
 	          <input class="qty" type="number" step="${step}" value="${item.qty}" onchange="changeQty('${secKey}','${id}',this.value)">
 	          <input class="status-check" type="checkbox" ${item.status==="ok"?"checked":""} onchange="toggleStatus('${secKey}','${id}',this.checked)" title="Есть в наличии">
@@ -1734,6 +1816,26 @@ function toggleStatus(secKey,id,isChecked){
 async function deleteItem(secKey,id){
   if(!confirm("Удалить позицию?")) return;
   db.ref(`${secKey}/${id}`).remove();
+}
+
+async function renameItem(secKey, id, currentName){
+  const prev = String(currentName || "").trim();
+  const entered = prompt("Новое название позиции:", prev);
+  if(entered == null) return;
+  const name = String(entered || "").trim();
+  if(!name){
+    alert("Название не может быть пустым");
+    return;
+  }
+  if(name.length > 80){
+    alert("Слишком длинное название (макс 80 символов)");
+    return;
+  }
+  if(name === prev) return;
+  await db.ref(`${secKey}/${id}`).update({
+    name,
+    ...actorMeta()
+  });
 }
 
 // ===== Добавление =====

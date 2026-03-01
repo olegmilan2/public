@@ -1350,6 +1350,14 @@ h1 {
   min-width: 0;
 }
 
+@media (hover: hover) and (pointer: fine) {
+  .name {
+    cursor: pointer;
+    -webkit-user-select: none;
+    user-select: none;
+  }
+}
+
 .type {
   font-size: 9px;
   color: var(--muted);
@@ -1537,6 +1545,12 @@ textarea::placeholder {
 
 .item-swipe-content.delete-arming {
   opacity: 0.72;
+  transform: none;
+  transition: opacity 0.16s ease;
+}
+
+.item-swipe-content.rename-arming {
+  opacity: 0.78;
   transform: none;
   transition: opacity 0.16s ease;
 }
