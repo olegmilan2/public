@@ -1541,6 +1541,18 @@ textarea::placeholder {
     width: 22px;
     height: 22px;
   }
+
+  /* iOS/Android: prevent text selection/callout on tap-and-hold gestures. */
+  .item-swipe-content,
+  .item-swipe-content .name,
+  .item-swipe-content .type,
+  .item-swipe-content .timer,
+  .item-swipe-content .meta {
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+  }
 }
 
 .item-swipe-content.delete-arming {
