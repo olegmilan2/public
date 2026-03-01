@@ -1563,6 +1563,95 @@ document.addEventListener("pointerdown", (e) => {
 }, { passive: true });
 
 // ===== Рендер =====
+function isCoarsePointerDevice(){
+  try {
+    return window.matchMedia && window.matchMedia("(hover: none) and (pointer: coarse)").matches;
+  } catch (e) {
+    return false;
+  }
+}
+
+const DELETE_HOLD_MS = 650;
+const deleteHoldTimers = new WeakMap();
+let deleteHoldHintShown = false;
+
+function startDeleteHold(btn){
+  if(!btn) return;
+  if(!isCoarsePointerDevice()) return;
+  if(deleteHoldTimers.has(btn)) return;
+
+  btn.classList.add("delete-arming");
+  const secKey = btn.dataset.secKey;
+  const id = btn.dataset.itemId;
+  const t = setTimeout(() => {
+    deleteHoldTimers.delete(btn);
+    btn.classList.remove("delete-arming");
+    btn.dataset.holdFired = "1";
+    if(secKey && id) deleteItem(secKey, id);
+  }, DELETE_HOLD_MS);
+  deleteHoldTimers.set(btn, t);
+}
+
+function cancelDeleteHold(btn){
+  if(!btn) return;
+  const t = deleteHoldTimers.get(btn);
+  if(!t) return;
+  clearTimeout(t);
+  deleteHoldTimers.delete(btn);
+  btn.classList.remove("delete-arming");
+}
+
+document.addEventListener("pointerdown", (e) => {
+  const btn = e.target && e.target.closest ? e.target.closest(".btn-delete[data-sec-key][data-item-id]") : null;
+  if(!btn) return;
+  if(!isCoarsePointerDevice()) return;
+  e.preventDefault();
+  startDeleteHold(btn);
+}, { passive: false });
+
+document.addEventListener("pointerup", (e) => {
+  const btn = e.target && e.target.closest ? e.target.closest(".btn-delete[data-sec-key][data-item-id]") : null;
+  if(!btn) return;
+  cancelDeleteHold(btn);
+}, { passive: true });
+
+document.addEventListener("pointercancel", (e) => {
+  const btn = e.target && e.target.closest ? e.target.closest(".btn-delete[data-sec-key][data-item-id]") : null;
+  if(!btn) return;
+  cancelDeleteHold(btn);
+}, { passive: true });
+
+document.addEventListener("click", (e) => {
+  const btn = e.target && e.target.closest ? e.target.closest(".btn-delete[data-sec-key][data-item-id]") : null;
+  if(!btn) return;
+
+  const secKey = btn.dataset.secKey;
+  const id = btn.dataset.itemId;
+  if(!secKey || !id) return;
+
+  // On touch devices deletion requires a hold to reduce accidental taps.
+  if(isCoarsePointerDevice()){
+    e.preventDefault();
+    e.stopPropagation();
+    if(btn.dataset.holdFired === "1"){
+      btn.dataset.holdFired = "0";
+      return;
+    }
+    if(!deleteHoldHintShown){
+      deleteHoldHintShown = true;
+      const prev = btn.textContent;
+      btn.textContent = "Держ";
+      setTimeout(() => {
+        try { btn.textContent = prev; } catch (e) { /* ignore */ }
+      }, 900);
+    }
+    return;
+  }
+
+  e.preventDefault();
+  deleteItem(secKey, id);
+}, { passive: false });
+
 function renderSection(secKey, data){
   const box=document.getElementById(secKey+"-box");
   if(!box) return;
@@ -1588,22 +1677,22 @@ function renderSection(secKey, data){
     const typeLabel = secKey==="bar" ? (item.type==="portion"?"🥃 Порционно":"🧴 Бутылки") : "";
     const step=item.type==="portion"?"0.01":"1";
 
-    div.innerHTML=`
-      <div class="item-swipe-under" aria-hidden="true">
-        <button class="item-swipe-delete" type="button" tabindex="-1">Удалить</button>
-      </div>
-      <div class="item-swipe-content">
-        <div class="line">
-          <div class="name">${item.name}</div>
-          <div class="type">${typeLabel}</div>
-          <input class="qty" type="number" step="${step}" value="${item.qty}" onchange="changeQty('${secKey}','${id}',this.value)">
-          <input class="status-check" type="checkbox" ${item.status==="ok"?"checked":""} onchange="toggleStatus('${secKey}','${id}',this.checked)" title="Есть в наличии">
-          <button class="btn-delete" onclick="deleteItem('${secKey}','${id}')">×</button>
-        </div>
-        <div class="timer ${item.status==="out"?"show":""}" data-out-since="${item.outSince || ""}">${getTimerLabel(item)}</div>
-        <div class="meta">${getStatusMetaLabel(item)}</div>
-      </div>
-    `;
+	    div.innerHTML=`
+	      <div class="item-swipe-under" aria-hidden="true">
+	        <button class="item-swipe-delete" type="button" tabindex="-1">Удалить</button>
+	      </div>
+	      <div class="item-swipe-content">
+	        <div class="line">
+	          <div class="name">${item.name}</div>
+	          <div class="type">${typeLabel}</div>
+	          <input class="qty" type="number" step="${step}" value="${item.qty}" onchange="changeQty('${secKey}','${id}',this.value)">
+	          <input class="status-check" type="checkbox" ${item.status==="ok"?"checked":""} onchange="toggleStatus('${secKey}','${id}',this.checked)" title="Есть в наличии">
+	          <button class="btn-delete" type="button" data-sec-key="${secKey}" data-item-id="${id}" aria-label="Удалить">×</button>
+	        </div>
+	        <div class="timer ${item.status==="out"?"show":""}" data-out-since="${item.outSince || ""}">${getTimerLabel(item)}</div>
+	        <div class="meta">${getStatusMetaLabel(item)}</div>
+	      </div>
+	    `;
     box.appendChild(div);
 
     if(isNew){

@@ -1519,6 +1519,52 @@ textarea::placeholder {
   }
 }
 
+/* Mobile ergonomics: larger tap targets for "add item" form. */
+@media (hover: none) and (pointer: coarse) {
+  .add-form {
+    padding: 10px;
+    border-radius: 12px;
+  }
+
+  .form-grid {
+    gap: 8px;
+  }
+
+  .add-form input,
+  .add-form select {
+    height: 50px; /* ~50-55px is a comfortable tap target */
+    padding: 12px 12px;
+    border-radius: 12px;
+    font-size: 17px; /* avoids iOS Safari auto-zoom on focus */
+    line-height: 1.2;
+  }
+
+  .btn-add {
+    min-height: 50px;
+    padding: 12px 14px;
+    border-radius: 12px;
+    font-size: 17px;
+    font-weight: 800;
+    letter-spacing: 0.01em;
+  }
+
+  /* Reduce accidental taps between "in stock" checkbox and delete. */
+  .status-check {
+    width: 22px;
+    height: 22px;
+  }
+
+  .btn-delete {
+    margin-left: 14px;
+    touch-action: manipulation;
+  }
+
+  .btn-delete.delete-arming {
+    opacity: 0.55;
+    transform: none;
+  }
+}
+
 input:focus,
 select:focus {
   border-color: var(--focus-border);
