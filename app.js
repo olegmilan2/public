@@ -839,6 +839,13 @@ function updateTimers(){
     const outSince = node.dataset.outSince;
     if(!outSince) return;
     node.textContent = `Нет: ${formatOutDuration(outSince)}`;
+
+    const outSinceNum = Number(outSince);
+    const diffMs = Number.isFinite(outSinceNum) ? (Date.now() - outSinceNum) : 0;
+    const urgent = diffMs >= 5 * 60 * 60 * 1000;
+    node.classList.toggle("timer-urgent", urgent);
+    const itemEl = node.closest ? node.closest(".item") : null;
+    if(itemEl) itemEl.classList.toggle("out-urgent", urgent);
   });
 }
 
@@ -1430,15 +1437,44 @@ function attachSwipeToDelete(itemEl, secKey, id){
 
   const MAX_SWIPE = 160;        // px
   const DELETE_THRESHOLD = 110; // px (easier on mobile)
+  const DELETE_HOLD_MS = 650;
+  const HOLD_CANCEL_PX = 10;
 
   let startX = 0;
   let startY = 0;
   let active = false;
   let dragging = false;
   let dx = 0;
+  let holdTimer = 0;
+  let holdFired = false;
 
   function getContent(){
     return itemEl.querySelector(".item-swipe-content");
+  }
+
+  function clearHold(){
+    if(holdTimer){
+      clearTimeout(holdTimer);
+      holdTimer = 0;
+    }
+    holdFired = false;
+  }
+
+  function armHold(){
+    if(!isCoarsePointerDevice()) return;
+    if(holdTimer) return;
+    const content = getContent();
+    if(content) content.classList.add("delete-arming");
+    holdTimer = setTimeout(async () => {
+      holdTimer = 0;
+      holdFired = true;
+      const content2 = getContent();
+      if(content2) content2.classList.remove("delete-arming");
+      const nameEl = content2 ? content2.querySelector(".name") : null;
+      const name = nameEl ? String(nameEl.textContent || "").trim() : "";
+      if(!confirm(`Удалить позицию${name ? ` «${name}»` : ""}?`)) return;
+      await deleteItem(secKey, id);
+    }, DELETE_HOLD_MS);
   }
 
   function setDx(nextDx){
@@ -1470,6 +1506,8 @@ function attachSwipeToDelete(itemEl, secKey, id){
     startY = e.clientY;
     itemEl.classList.add("swiping");
     try { itemEl.setPointerCapture(e.pointerId); } catch (err) { /* ignore */ }
+    clearHold();
+    armHold();
   }, { passive: true });
 
   itemEl.addEventListener("pointermove", (e) => {
@@ -1478,16 +1516,30 @@ function attachSwipeToDelete(itemEl, secKey, id){
     const moveX = e.clientX - startX;
     const moveY = e.clientY - startY;
 
+    if(holdTimer){
+      if(Math.hypot(moveX, moveY) >= HOLD_CANCEL_PX){
+        const content = getContent();
+        if(content) content.classList.remove("delete-arming");
+        clearHold();
+      }
+    }
+
     // If user scrolls vertically, abort swipe.
     if(!dragging && Math.abs(moveY) > 8 && Math.abs(moveY) > Math.abs(moveX)){
       active = false;
       itemEl.classList.remove("swiping");
+      const content = getContent();
+      if(content) content.classList.remove("delete-arming");
+      clearHold();
       return;
     }
 
     // Swipe-to-delete is only to the left.
     if(!dragging && moveX < -6){
       dragging = true;
+      const content = getContent();
+      if(content) content.classList.remove("delete-arming");
+      clearHold();
     }
     if(!dragging) return;
 
@@ -1507,8 +1559,15 @@ function attachSwipeToDelete(itemEl, secKey, id){
 
     if(!dragging){
       itemEl.classList.remove("swiping");
+      const content = getContent();
+      if(content) content.classList.remove("delete-arming");
+      clearHold();
       return;
     }
+
+    const content = getContent();
+    if(content) content.classList.remove("delete-arming");
+    clearHold();
 
     if(Math.abs(dx) >= DELETE_THRESHOLD){
       closeSwipeItem(itemEl);
@@ -1521,6 +1580,9 @@ function attachSwipeToDelete(itemEl, secKey, id){
 
   itemEl.addEventListener("pointercancel", () => {
     active = false;
+    const content = getContent();
+    if(content) content.classList.remove("delete-arming");
+    clearHold();
     snapTo("closed");
   });
 }
@@ -1531,6 +1593,23 @@ document.addEventListener("pointerdown", (e) => {
   closeSwipeItem(openSwipeItem);
 }, { passive: true });
 
+// Desktop UX: right-click on an item to delete (with confirmation).
+document.addEventListener("contextmenu", (e) => {
+  const t = e.target;
+  if(t && t.closest && t.closest("input, select, textarea, button")) return;
+  const itemEl = t && t.closest ? t.closest(".item[data-id][data-sec-key]") : null;
+  if(!itemEl) return;
+  const secKey = itemEl.dataset.secKey;
+  const id = itemEl.dataset.id;
+  if(!secKey || !id) return;
+
+  e.preventDefault();
+  const nameEl = itemEl.querySelector ? itemEl.querySelector(".name") : null;
+  const name = nameEl ? String(nameEl.textContent || "").trim() : "";
+  if(!confirm(`Удалить позицию${name ? ` «${name}»` : ""}?`)) return;
+  deleteItem(secKey, id);
+}, { passive: false });
+
 // ===== Рендер =====
 function isCoarsePointerDevice(){
   try {
@@ -1539,101 +1618,6 @@ function isCoarsePointerDevice(){
     return false;
   }
 }
-
-const DELETE_HOLD_MS = 650;
-const DELETE_HOLD_CANCEL_PX = 12;
-const deleteHoldByPointerId = new Map();
-let deleteHoldHintShown = false;
-
-function startDeleteHold(btn, pointerId, startX, startY){
-  if(!btn) return;
-  if(!isCoarsePointerDevice()) return;
-  if(deleteHoldByPointerId.has(pointerId)) return;
-
-  btn.classList.add("delete-arming");
-  const secKey = btn.dataset.secKey;
-  const id = btn.dataset.itemId;
-  const t = setTimeout(() => {
-    deleteHoldByPointerId.delete(pointerId);
-    btn.classList.remove("delete-arming");
-    btn.dataset.holdFired = "1";
-    if(secKey && id) deleteItem(secKey, id);
-  }, DELETE_HOLD_MS);
-
-  deleteHoldByPointerId.set(pointerId, {
-    btn,
-    timerId: t,
-    startX,
-    startY
-  });
-}
-
-function cancelDeleteHoldByPointer(pointerId){
-  const state = deleteHoldByPointerId.get(pointerId);
-  if(!state) return;
-  clearTimeout(state.timerId);
-  deleteHoldByPointerId.delete(pointerId);
-  try { state.btn.classList.remove("delete-arming"); } catch (e) { /* ignore */ }
-}
-
-document.addEventListener("pointerdown", (e) => {
-  const btn = e.target && e.target.closest ? e.target.closest(".btn-delete[data-sec-key][data-item-id]") : null;
-  if(!btn) return;
-  if(!isCoarsePointerDevice()) return;
-  e.preventDefault();
-  try { btn.setPointerCapture(e.pointerId); } catch (err) { /* ignore */ }
-  startDeleteHold(btn, e.pointerId, e.clientX, e.clientY);
-}, { passive: false });
-
-document.addEventListener("pointermove", (e) => {
-  if(!isCoarsePointerDevice()) return;
-  const state = deleteHoldByPointerId.get(e.pointerId);
-  if(!state) return;
-  const dx = e.clientX - state.startX;
-  const dy = e.clientY - state.startY;
-  if(Math.hypot(dx, dy) >= DELETE_HOLD_CANCEL_PX){
-    cancelDeleteHoldByPointer(e.pointerId);
-  }
-}, { passive: true });
-
-document.addEventListener("pointerup", (e) => {
-  cancelDeleteHoldByPointer(e.pointerId);
-}, { passive: true });
-
-document.addEventListener("pointercancel", (e) => {
-  cancelDeleteHoldByPointer(e.pointerId);
-}, { passive: true });
-
-document.addEventListener("click", (e) => {
-  const btn = e.target && e.target.closest ? e.target.closest(".btn-delete[data-sec-key][data-item-id]") : null;
-  if(!btn) return;
-
-  const secKey = btn.dataset.secKey;
-  const id = btn.dataset.itemId;
-  if(!secKey || !id) return;
-
-  // On touch devices deletion requires a hold to reduce accidental taps.
-  if(isCoarsePointerDevice()){
-    e.preventDefault();
-    e.stopPropagation();
-    if(btn.dataset.holdFired === "1"){
-      btn.dataset.holdFired = "0";
-      return;
-    }
-    if(!deleteHoldHintShown){
-      deleteHoldHintShown = true;
-      const prev = btn.textContent;
-      btn.textContent = "Держ";
-      setTimeout(() => {
-        try { btn.textContent = prev; } catch (e) { /* ignore */ }
-      }, 900);
-    }
-    return;
-  }
-
-  e.preventDefault();
-  deleteItem(secKey, id);
-}, { passive: false });
 
 function renderSection(secKey, data){
   const box=document.getElementById(secKey+"-box");
@@ -1649,8 +1633,10 @@ function renderSection(secKey, data){
     if(!div){
       div = document.createElement("div");
       div.dataset.id = id;
+      div.dataset.secKey = secKey;
       div.className = "item";
     }
+    div.dataset.secKey = secKey;
     if(item.status==="out") div.classList.add("out");
     if(item.status==="ok") div.classList.add("ok");
     if(item.status!=="out") div.classList.remove("out");
@@ -1667,13 +1653,12 @@ function renderSection(secKey, data){
 	          <div class="type">${typeLabel}</div>
 	          <input class="qty" type="number" step="${step}" value="${item.qty}" onchange="changeQty('${secKey}','${id}',this.value)">
 	          <input class="status-check" type="checkbox" ${item.status==="ok"?"checked":""} onchange="toggleStatus('${secKey}','${id}',this.checked)" title="Есть в наличии">
-	          <button class="btn-delete" type="button" data-sec-key="${secKey}" data-item-id="${id}" aria-label="Удалить">×</button>
 	        </div>
 	        <div class="timer ${item.status==="out"?"show":""}" data-out-since="${item.outSince || ""}">${getTimerLabel(item)}</div>
 	        <div class="meta">${getStatusMetaLabel(item)}</div>
 	      </div>
 	    `;
-    box.appendChild(div);
+	    box.appendChild(div);
 
     if(isNew){
       attachSwipeToDelete(div, secKey, id);
