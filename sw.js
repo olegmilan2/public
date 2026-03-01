@@ -37,6 +37,25 @@ messaging.onBackgroundMessage(payload => {
   self.registration.showNotification(title, options);
 });
 
+self.addEventListener("notificationclick", event => {
+  event.notification.close();
+  const data = event.notification && event.notification.data ? event.notification.data : {};
+  const url = (data && data.url) ? String(data.url) : "./";
+
+  event.waitUntil(
+    self.clients.matchAll({ type: "window", includeUncontrolled: true }).then(clientsArr => {
+      for(const client of clientsArr){
+        try {
+          if("focus" in client) return client.focus();
+        } catch (e) {
+          // ignore
+        }
+      }
+      if(self.clients.openWindow) return self.clients.openWindow(url);
+    })
+  );
+});
+
 self.addEventListener("install", event => {
   event.waitUntil(
     caches.open(CACHE_NAME).then(cache => cache.addAll(APP_SHELL))

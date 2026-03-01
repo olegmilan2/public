@@ -26,6 +26,12 @@ const ACTIVE_VIEW_KEY = "stoplist_active_view";
 const IOS_INSTALL_DISMISSED_KEY = "iphone_install_prompt_dismissed";
 const ANDROID_INSTALL_DISMISSED_KEY = "android_install_prompt_dismissed";
 const NEW_ITEM_NOTIFICATIONS_KEY = "new_item_notifications_enabled";
+const TG_ENABLED_KEY = "tg_notifications_enabled";
+const TG_TOKEN_KEY = "tg_bot_token";
+const TG_CHAT_ID_KEY = "tg_chat_id";
+const SETTINGS_LOCK_ENABLED_KEY = "settings_lock_enabled";
+const SETTINGS_LOCK_PASSWORD_KEY = "settings_lock_password";
+const SETTINGS_UNLOCKED_SESSION_KEY = "settings_unlocked_session";
 const FCM_VAPID_KEY = "BJZ5GUE1xVHehU4Mx1e9XX-6GFtFK7YL1i52rtA80ki-fW0KCslTcWS3hxj_mIci0L1fnQH_ykENBMSznD4LGE4";
 let currentUser = requestUserNameOnStart();
 let deferredInstallPrompt = null;
@@ -102,6 +108,22 @@ function storageSet(key, value){
     localStorage.setItem(key, value);
   } catch (e) {
     // ignore storage errors in private mode
+  }
+}
+
+function sessionGet(key){
+  try {
+    return sessionStorage.getItem(key);
+  } catch (e) {
+    return null;
+  }
+}
+
+function sessionSet(key, value){
+  try {
+    sessionStorage.setItem(key, value);
+  } catch (e) {
+    // ignore
   }
 }
 
@@ -250,6 +272,217 @@ function getSectionName(secKey){
   return sec ? sec.name : secKey;
 }
 
+function getTelegramConfig(){
+  const enabled = storageGet(TG_ENABLED_KEY) === "1";
+  const token = (storageGet(TG_TOKEN_KEY) || "").trim();
+  const chatId = (storageGet(TG_CHAT_ID_KEY) || "").trim();
+  return { enabled, token, chatId };
+}
+
+function canSendTelegram(){
+  const cfg = getTelegramConfig();
+  return cfg.enabled && !!cfg.token && !!cfg.chatId;
+}
+
+function sendTelegramMessage(text, parseMode){
+  const { token, chatId } = getTelegramConfig();
+  if(!token || !chatId) return;
+  const message = String(text || "").trim();
+  if(!message) return;
+
+  // Telegram Bot API doesn't reliably support CORS for browsers.
+  // Use a fire-and-forget GET request via Image to avoid CORS reads.
+  // NOTE: token must NOT be URL-encoded in the path (":" is part of the token format).
+  const tokenPath = token.replace(/\s+/g, "");
+  const url =
+    `https://api.telegram.org/bot${tokenPath}/sendMessage` +
+    `?chat_id=${encodeURIComponent(chatId)}` +
+    `&text=${encodeURIComponent(message)}` +
+    (parseMode ? `&parse_mode=${encodeURIComponent(String(parseMode))}` : "") +
+    `&disable_web_page_preview=1`;
+  try {
+    const img = new Image();
+    img.referrerPolicy = "no-referrer";
+    img.src = url;
+  } catch (e) {
+    // ignore send errors
+  }
+}
+
+function syncTelegramUi(){
+  const toggle = document.getElementById("toggle-tg");
+  const status = document.getElementById("tg-status");
+  const hint = document.getElementById("tg-hint");
+  const tokenEl = document.getElementById("tg-token");
+  const chatIdEl = document.getElementById("tg-chatid");
+  const testBtn = document.getElementById("tg-test");
+  if(!toggle && !status && !hint && !tokenEl && !chatIdEl && !testBtn) return;
+
+  const cfg = getTelegramConfig();
+  const enabled = cfg.enabled;
+  const ready = canSendTelegram();
+
+  if(toggle){
+    toggle.setAttribute("aria-checked", enabled ? "true" : "false");
+    toggle.setAttribute("aria-label", enabled ? "Отключить Telegram уведомления" : "Включить Telegram уведомления");
+  }
+
+  if(tokenEl && tokenEl.value !== cfg.token) tokenEl.value = cfg.token;
+  if(chatIdEl && chatIdEl.value !== cfg.chatId) chatIdEl.value = cfg.chatId;
+
+  if(testBtn){
+    testBtn.disabled = !ready;
+  }
+
+  if(status){
+    status.textContent = `Статус: ${enabled ? "включено" : "выключено"} • ${ready ? "готово" : "нужны token/chatId"}`;
+  }
+
+  if(hint){
+    hint.textContent = enabled
+      ? "Сообщение улетает в Telegram при добавлении новой позиции."
+      : "Включи и заполни token + chatId. Важно: токен в браузере виден пользователю этого устройства.";
+  }
+}
+
+function initTelegramSettings(){
+  const toggle = document.getElementById("toggle-tg");
+  const tokenEl = document.getElementById("tg-token");
+  const chatIdEl = document.getElementById("tg-chatid");
+  const testBtn = document.getElementById("tg-test");
+  if(!toggle || !tokenEl || !chatIdEl || !testBtn) return;
+
+  // Ensure defaults exist so UI is stable.
+  const savedEnabled = storageGet(TG_ENABLED_KEY);
+  if(savedEnabled !== "1" && savedEnabled !== "0") storageSet(TG_ENABLED_KEY, "0");
+
+  tokenEl.addEventListener("input", () => {
+    storageSet(TG_TOKEN_KEY, String(tokenEl.value || "").trim());
+    syncTelegramUi();
+  });
+  chatIdEl.addEventListener("input", () => {
+    storageSet(TG_CHAT_ID_KEY, String(chatIdEl.value || "").trim());
+    syncTelegramUi();
+  });
+
+  toggle.addEventListener("click", () => {
+    const enabled = storageGet(TG_ENABLED_KEY) === "1";
+    storageSet(TG_ENABLED_KEY, enabled ? "0" : "1");
+    syncTelegramUi();
+  });
+
+  testBtn.addEventListener("click", () => {
+    if(!canSendTelegram()) return;
+    sendTelegramMessage(`✅ <b>Тест</b>: Telegram уведомления работают\nПользователь: <b>${escapeHtml(currentUser)}</b>`, "HTML");
+    alert("Тест отправлен в Telegram (если token/chatId верные).");
+  });
+
+  syncTelegramUi();
+}
+
+function isSettingsLockEnabled(){
+  return storageGet(SETTINGS_LOCK_ENABLED_KEY) === "1" && !!(storageGet(SETTINGS_LOCK_PASSWORD_KEY) || "").trim();
+}
+
+function promptNewPassword(){
+  const pass1 = prompt("Задайте пароль для настроек:");
+  if(pass1 == null) return null;
+  const p1 = String(pass1 || "").trim();
+  if(!p1) return null;
+  const pass2 = prompt("Повторите пароль:");
+  if(pass2 == null) return null;
+  const p2 = String(pass2 || "").trim();
+  if(p1 !== p2){
+    alert("Пароли не совпали");
+    return null;
+  }
+  return p1;
+}
+
+function verifySettingsPasswordOncePerSession(){
+  if(!isSettingsLockEnabled()) return true;
+  if(sessionGet(SETTINGS_UNLOCKED_SESSION_KEY) === "1") return true;
+
+  const entered = prompt("Введите пароль настроек:");
+  if(entered == null) return false;
+  const expected = (storageGet(SETTINGS_LOCK_PASSWORD_KEY) || "").trim();
+  if(String(entered || "").trim() !== expected){
+    alert("Неверный пароль");
+    return false;
+  }
+  sessionSet(SETTINGS_UNLOCKED_SESSION_KEY, "1");
+  return true;
+}
+
+function syncSettingsLockUi(){
+  const toggle = document.getElementById("toggle-settings-lock");
+  const status = document.getElementById("settings-lock-status");
+  const hint = document.getElementById("settings-lock-hint");
+  const changeBtn = document.getElementById("settings-lock-change");
+  if(!toggle && !status && !hint && !changeBtn) return;
+
+  const enabled = isSettingsLockEnabled();
+
+  if(toggle){
+    toggle.setAttribute("aria-checked", enabled ? "true" : "false");
+    toggle.setAttribute("aria-label", enabled ? "Отключить пароль на настройки" : "Включить пароль на настройки");
+  }
+  if(status){
+    status.textContent = `Статус: ${enabled ? "включено" : "выключено"}`;
+  }
+  if(changeBtn){
+    changeBtn.disabled = !enabled;
+  }
+  if(hint){
+    hint.textContent = enabled
+      ? "Пароль спрашивается при открытии настроек (разблокировка на эту сессию)."
+      : "Включи, чтобы скрыть настройки (Telegram и опасные действия) от посторонних.";
+  }
+}
+
+function initSettingsLock(){
+  const toggle = document.getElementById("toggle-settings-lock");
+  const changeBtn = document.getElementById("settings-lock-change");
+  if(!toggle || !changeBtn) return;
+
+  const savedEnabled = storageGet(SETTINGS_LOCK_ENABLED_KEY);
+  if(savedEnabled !== "1" && savedEnabled !== "0") storageSet(SETTINGS_LOCK_ENABLED_KEY, "0");
+  syncSettingsLockUi();
+
+  toggle.addEventListener("click", () => {
+    const enabled = isSettingsLockEnabled();
+    if(enabled){
+      const ok = verifySettingsPasswordOncePerSession();
+      if(!ok) return;
+      storageSet(SETTINGS_LOCK_ENABLED_KEY, "0");
+      storageSet(SETTINGS_LOCK_PASSWORD_KEY, "");
+      sessionSet(SETTINGS_UNLOCKED_SESSION_KEY, "0");
+      syncSettingsLockUi();
+      return;
+    }
+
+    const pass = promptNewPassword();
+    if(!pass) return;
+    storageSet(SETTINGS_LOCK_PASSWORD_KEY, pass);
+    storageSet(SETTINGS_LOCK_ENABLED_KEY, "1");
+    sessionSet(SETTINGS_UNLOCKED_SESSION_KEY, "1");
+    syncSettingsLockUi();
+  });
+
+  changeBtn.addEventListener("click", () => {
+    const enabled = isSettingsLockEnabled();
+    if(!enabled) return;
+    const ok = verifySettingsPasswordOncePerSession();
+    if(!ok) return;
+    const pass = promptNewPassword();
+    if(!pass) return;
+    storageSet(SETTINGS_LOCK_PASSWORD_KEY, pass);
+    sessionSet(SETTINGS_UNLOCKED_SESSION_KEY, "1");
+    syncSettingsLockUi();
+    alert("Пароль обновлен");
+  });
+}
+
 async function requestNotificationPermission(){
   if(!("Notification" in window)) return;
   try {
@@ -286,6 +519,7 @@ async function initFcmToken(){
   if(!("Notification" in window) || Notification.permission !== "granted") return;
   if(!("serviceWorker" in navigator)) return;
   if(!firebase.messaging) return;
+  if(storageGet(NEW_ITEM_NOTIFICATIONS_KEY) !== "1") return;
 
   try {
     const messaging = firebase.messaging();
@@ -306,13 +540,18 @@ async function initFcmToken(){
 
     messaging.onMessage(payload => {
       if(Notification.permission !== "granted") return;
+      if(storageGet(NEW_ITEM_NOTIFICATIONS_KEY) !== "1") return;
       const title = payload?.notification?.title || "Стоп лист";
       const body = payload?.notification?.body || "Новое уведомление";
-      new Notification(title, {
+      const notification = new Notification(title, {
         body,
         icon: "./app-icon-512.png",
-        badge: "./app-icon-512.png"
+        badge: "./app-icon-512.png",
+        data: payload?.data || {}
       });
+      notification.onclick = () => {
+        try { window.focus(); } catch (e) { /* ignore */ }
+      };
     });
   } catch (e) {
     // ignore FCM initialization errors
@@ -338,10 +577,11 @@ function notifyNewItem(secKey, item){
 }
 
 function initNewItemNotifications(){
-  // Не запрашиваем разрешение автоматически, чтобы не мешать вводу в полях.
+  // Backward-compat: if permission is already granted and user hasn't chosen, default to enabled.
   if("Notification" in window && Notification.permission === "granted"){
-    storageSet(NEW_ITEM_NOTIFICATIONS_KEY, "1");
-    initFcmToken();
+    const saved = storageGet(NEW_ITEM_NOTIFICATIONS_KEY);
+    if(saved == null) storageSet(NEW_ITEM_NOTIFICATIONS_KEY, "1");
+    if(storageGet(NEW_ITEM_NOTIFICATIONS_KEY) === "1") initFcmToken();
   }
 
   sections.forEach(sec => {
@@ -358,6 +598,94 @@ function initNewItemNotifications(){
       if(item.createdBy && item.createdBy === currentUser) return;
       notifyNewItem(sec.key, item);
     });
+  });
+}
+
+function getNotificationPermissionLabel(){
+  if(!("Notification" in window)) return "не поддерживается";
+  if(Notification.permission === "granted") return "разрешено";
+  if(Notification.permission === "denied") return "заблокировано";
+  return "не запрошено";
+}
+
+function shouldShowIphoneWebPushHint(){
+  // iOS web push works only in installed PWA (standalone mode).
+  return isIphoneSafari() && !isStandaloneMode();
+}
+
+function syncNewItemNotifsUi(){
+  const toggle = document.getElementById("toggle-newitem-notifs");
+  const status = document.getElementById("newitem-notifs-status");
+  const hint = document.getElementById("newitem-notifs-hint");
+  if(!toggle && !status && !hint) return;
+
+  const supported = ("Notification" in window);
+  const permissionLabel = getNotificationPermissionLabel();
+  const enabled = storageGet(NEW_ITEM_NOTIFICATIONS_KEY) === "1";
+
+  if(toggle){
+    toggle.disabled = !supported || Notification.permission === "denied";
+    toggle.setAttribute("aria-checked", enabled ? "true" : "false");
+    toggle.setAttribute("aria-label", enabled ? "Отключить уведомления о новых позициях" : "Включить уведомления о новых позициях");
+  }
+
+  if(status){
+    const parts = [];
+    parts.push(`Разрешение: ${permissionLabel}`);
+    parts.push(`Включено: ${enabled ? "да" : "нет"}`);
+    status.textContent = `Статус: ${parts.join(" • ")}`;
+  }
+
+  if(hint){
+    if(!supported){
+      hint.textContent = "В этом браузере уведомления не поддерживаются.";
+    } else if(shouldShowIphoneWebPushHint()){
+      hint.textContent = "На iPhone уведомления работают только если установить сайт на экран Домой (APP mode).";
+    } else if(Notification.permission === "denied"){
+      hint.textContent = "Разрешение заблокировано в браузере. Разблокируйте уведомления в настройках сайта.";
+    } else {
+      hint.textContent = "Уведомление приходит при добавлении новой позиции другим пользователем.";
+    }
+  }
+}
+
+function initNotificationSettings(){
+  const toggle = document.getElementById("toggle-newitem-notifs");
+  if(!toggle) return;
+
+  syncNewItemNotifsUi();
+
+  toggle.addEventListener("click", async () => {
+    const currentlyEnabled = storageGet(NEW_ITEM_NOTIFICATIONS_KEY) === "1";
+    if(currentlyEnabled){
+      storageSet(NEW_ITEM_NOTIFICATIONS_KEY, "0");
+      syncNewItemNotifsUi();
+      return;
+    }
+
+    if(!("Notification" in window)){
+      syncNewItemNotifsUi();
+      return;
+    }
+
+    if(Notification.permission === "granted"){
+      storageSet(NEW_ITEM_NOTIFICATIONS_KEY, "1");
+      initFcmToken();
+      syncNewItemNotifsUi();
+      return;
+    }
+
+    if(Notification.permission === "denied"){
+      syncNewItemNotifsUi();
+      return;
+    }
+
+    await requestNotificationPermission();
+    if(Notification.permission === "granted"){
+      storageSet(NEW_ITEM_NOTIFICATIONS_KEY, "1");
+      initFcmToken();
+    }
+    syncNewItemNotifsUi();
   });
 }
 
@@ -425,6 +753,7 @@ function initSettingsSheet(){
       e.preventDefault();
       e.stopPropagation();
     }
+    if(!verifySettingsPasswordOncePerSession()) return;
     overlay.hidden = false;
     overlay.style.display = "grid";
     overlay.setAttribute("aria-hidden", "false");
@@ -1374,6 +1703,17 @@ async function addItem(secKey){
       ...actorMeta(),
       type:type
     });
+    if(canSendTelegram()){
+      const safeUser = escapeHtml(currentUser);
+      const safeSection = escapeHtml(getSectionName(secKey));
+      const safeName = escapeHtml(name);
+      const message =
+        `🚨 <b>СТОП-ЛИСТ ОБНОВЛЕН</b>\n\n` +
+        `📦 Секция: <b>${safeSection}</b>\n` +
+        `❌ Позиция: <b>${safeName}</b>\n` +
+        `👤 Кто: <b>${safeUser}</b>`;
+      sendTelegramMessage(message, "HTML");
+    }
     try {
       await incrementRatingOnAdd(secKey, name);
     } catch (e) {
@@ -1500,5 +1840,8 @@ initViewTabs();
 initChat();
 initSettingsSheet();
 initNewItemNotifications();
+initNotificationSettings();
+initTelegramSettings();
+initSettingsLock();
 initDangerActions();
 initRating();
