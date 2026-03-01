@@ -1274,34 +1274,6 @@ h1 {
   transform: translateY(-2px);
 }
 
-.item-swipe-under {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  padding-right: 10px;
-  border-radius: 7px;
-  background: linear-gradient(90deg, rgba(0, 0, 0, 0) 0%, var(--destructive-under-1) 52%, var(--destructive-under-2) 100%);
-}
-
-.item-swipe-delete {
-  padding: 7px 10px;
-  border-radius: 12px;
-  background: var(--destructive-btn-bg);
-  border: 1px solid var(--destructive-btn-border);
-  box-shadow: var(--destructive-btn-shadow);
-  color: rgba(255, 255, 255, 0.98);
-  font: 800 11px/1 "Manrope", "Segoe UI", sans-serif;
-  letter-spacing: 0.01em;
-  transform: none;
-}
-
-.item-swipe-delete:hover,
-.item-swipe-delete:active {
-  transform: none;
-}
-
 .item-swipe-content {
   position: relative;
   padding: 3px;
@@ -1319,10 +1291,6 @@ h1 {
 
 .item.swiping .item-swipe-content {
   transition: none;
-}
-
-.item.swipe-open .item-swipe-content {
-  transform: translateX(-88px);
 }
 
 .item-enter {
@@ -1557,6 +1525,10 @@ textarea::placeholder {
   .btn-delete {
     margin-left: 14px;
     touch-action: manipulation;
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
   }
 
   .btn-delete.delete-arming {

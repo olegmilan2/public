@@ -1428,10 +1428,8 @@ function attachSwipeToDelete(itemEl, secKey, id){
   if(!itemEl || itemEl.dataset.swipeBound === "1") return;
   itemEl.dataset.swipeBound = "1";
 
-  const MAX_SWIPE = 160;      // px
-  const OPEN_SWIPE = 88;      // px
-  const OPEN_THRESHOLD = 70;  // px
-  const DELETE_THRESHOLD = 140; // px
+  const MAX_SWIPE = 160;        // px
+  const DELETE_THRESHOLD = 110; // px (easier on mobile)
 
   let startX = 0;
   let startY = 0;
@@ -1453,13 +1451,8 @@ function attachSwipeToDelete(itemEl, secKey, id){
     itemEl.classList.remove("swiping");
     const content = getContent();
     if(content) content.style.transform = "";
-    if(target === "open"){
-      itemEl.classList.add("swipe-open");
-      openSwipeItem = itemEl;
-    } else {
-      itemEl.classList.remove("swipe-open");
-      if(openSwipeItem === itemEl) openSwipeItem = null;
-    }
+    itemEl.classList.remove("swipe-open");
+    if(openSwipeItem === itemEl) openSwipeItem = null;
   }
 
   itemEl.addEventListener("pointerdown", (e) => {
@@ -1492,7 +1485,8 @@ function attachSwipeToDelete(itemEl, secKey, id){
       return;
     }
 
-    if(!dragging && Math.abs(moveX) > 6){
+    // Swipe-to-delete is only to the left.
+    if(!dragging && moveX < -6){
       dragging = true;
     }
     if(!dragging) return;
@@ -1516,15 +1510,9 @@ function attachSwipeToDelete(itemEl, secKey, id){
       return;
     }
 
-    const absDx = Math.abs(dx);
-    if(absDx >= DELETE_THRESHOLD){
+    if(Math.abs(dx) >= DELETE_THRESHOLD){
       closeSwipeItem(itemEl);
       await deleteItem(secKey, id);
-      return;
-    }
-
-    if(absDx >= OPEN_THRESHOLD){
-      snapTo("open");
       return;
     }
 
@@ -1533,26 +1521,7 @@ function attachSwipeToDelete(itemEl, secKey, id){
 
   itemEl.addEventListener("pointercancel", () => {
     active = false;
-    if(itemEl.classList.contains("swipe-open")){
-      snapTo("open");
-    } else {
-      snapTo("closed");
-    }
-  });
-
-  // Tap-to-delete on the revealed underlay.
-  itemEl.addEventListener("click", async (e) => {
-    if(itemEl.dataset.swipeBlockClick === "1"){
-      itemEl.dataset.swipeBlockClick = "0";
-      e.preventDefault();
-      e.stopPropagation();
-      return;
-    }
-
-    const deleteBtn = e.target && e.target.closest ? e.target.closest(".item-swipe-delete") : null;
-    if(!deleteBtn) return;
-    closeSwipeItem(itemEl);
-    await deleteItem(secKey, id);
+    snapTo("closed");
   });
 }
 
@@ -1572,33 +1541,39 @@ function isCoarsePointerDevice(){
 }
 
 const DELETE_HOLD_MS = 650;
-const deleteHoldTimers = new WeakMap();
+const DELETE_HOLD_CANCEL_PX = 12;
+const deleteHoldByPointerId = new Map();
 let deleteHoldHintShown = false;
 
-function startDeleteHold(btn){
+function startDeleteHold(btn, pointerId, startX, startY){
   if(!btn) return;
   if(!isCoarsePointerDevice()) return;
-  if(deleteHoldTimers.has(btn)) return;
+  if(deleteHoldByPointerId.has(pointerId)) return;
 
   btn.classList.add("delete-arming");
   const secKey = btn.dataset.secKey;
   const id = btn.dataset.itemId;
   const t = setTimeout(() => {
-    deleteHoldTimers.delete(btn);
+    deleteHoldByPointerId.delete(pointerId);
     btn.classList.remove("delete-arming");
     btn.dataset.holdFired = "1";
     if(secKey && id) deleteItem(secKey, id);
   }, DELETE_HOLD_MS);
-  deleteHoldTimers.set(btn, t);
+
+  deleteHoldByPointerId.set(pointerId, {
+    btn,
+    timerId: t,
+    startX,
+    startY
+  });
 }
 
-function cancelDeleteHold(btn){
-  if(!btn) return;
-  const t = deleteHoldTimers.get(btn);
-  if(!t) return;
-  clearTimeout(t);
-  deleteHoldTimers.delete(btn);
-  btn.classList.remove("delete-arming");
+function cancelDeleteHoldByPointer(pointerId){
+  const state = deleteHoldByPointerId.get(pointerId);
+  if(!state) return;
+  clearTimeout(state.timerId);
+  deleteHoldByPointerId.delete(pointerId);
+  try { state.btn.classList.remove("delete-arming"); } catch (e) { /* ignore */ }
 }
 
 document.addEventListener("pointerdown", (e) => {
@@ -1606,19 +1581,27 @@ document.addEventListener("pointerdown", (e) => {
   if(!btn) return;
   if(!isCoarsePointerDevice()) return;
   e.preventDefault();
-  startDeleteHold(btn);
+  try { btn.setPointerCapture(e.pointerId); } catch (err) { /* ignore */ }
+  startDeleteHold(btn, e.pointerId, e.clientX, e.clientY);
 }, { passive: false });
 
+document.addEventListener("pointermove", (e) => {
+  if(!isCoarsePointerDevice()) return;
+  const state = deleteHoldByPointerId.get(e.pointerId);
+  if(!state) return;
+  const dx = e.clientX - state.startX;
+  const dy = e.clientY - state.startY;
+  if(Math.hypot(dx, dy) >= DELETE_HOLD_CANCEL_PX){
+    cancelDeleteHoldByPointer(e.pointerId);
+  }
+}, { passive: true });
+
 document.addEventListener("pointerup", (e) => {
-  const btn = e.target && e.target.closest ? e.target.closest(".btn-delete[data-sec-key][data-item-id]") : null;
-  if(!btn) return;
-  cancelDeleteHold(btn);
+  cancelDeleteHoldByPointer(e.pointerId);
 }, { passive: true });
 
 document.addEventListener("pointercancel", (e) => {
-  const btn = e.target && e.target.closest ? e.target.closest(".btn-delete[data-sec-key][data-item-id]") : null;
-  if(!btn) return;
-  cancelDeleteHold(btn);
+  cancelDeleteHoldByPointer(e.pointerId);
 }, { passive: true });
 
 document.addEventListener("click", (e) => {
@@ -1678,9 +1661,6 @@ function renderSection(secKey, data){
     const step=item.type==="portion"?"0.01":"1";
 
 	    div.innerHTML=`
-	      <div class="item-swipe-under" aria-hidden="true">
-	        <button class="item-swipe-delete" type="button" tabindex="-1">Удалить</button>
-	      </div>
 	      <div class="item-swipe-content">
 	        <div class="line">
 	          <div class="name">${item.name}</div>
