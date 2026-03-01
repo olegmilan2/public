@@ -4,6 +4,6 @@ compatibility_date = "2025-01-01"
 
 # After first deploy, set secrets:
 # - TELEGRAM_BOT_TOKEN
-# - TELEGRAM_CHAT_ID
+# - TELEGRAM_CHAT_IDS (preferred, comma-separated) OR TELEGRAM_CHAT_ID (single)
 # Optional:
 # - STOPLIST_API_KEY (if set, clients must send header x-stoplist-key)

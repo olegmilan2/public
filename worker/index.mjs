@@ -12,8 +12,8 @@ export default {
     }
 
     const botToken = (env.TELEGRAM_BOT_TOKEN || "").trim();
-    const chatId = (env.TELEGRAM_CHAT_ID || "").trim();
-    if (!botToken || !chatId) {
+    const chatIds = parseChatIds(env);
+    if (!botToken || chatIds.length === 0) {
       return json({ ok: false, error: "telegram_not_configured" }, 500, request);
     }
 
@@ -36,32 +36,55 @@ export default {
 
     const parseMode = String(body && body.parseMode ? body.parseMode : "HTML").trim() || "HTML";
 
-    const tgResp = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        chat_id: chatId,
-        text,
-        parse_mode: parseMode,
-        disable_web_page_preview: true
-      })
-    });
+    const errors = [];
+    for (const chatId of chatIds) {
+      const tgResp = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          chat_id: chatId,
+          text,
+          parse_mode: parseMode,
+          disable_web_page_preview: true
+        })
+      });
 
-    let tgJson = null;
-    try {
-      tgJson = await tgResp.json();
-    } catch (e) {
-      // ignore
+      let tgJson = null;
+      try {
+        tgJson = await tgResp.json();
+      } catch (e) {
+        // ignore
+      }
+
+      if (!tgResp.ok || !tgJson || tgJson.ok !== true) {
+        const desc = tgJson && tgJson.description ? String(tgJson.description) : `HTTP ${tgResp.status}`;
+        errors.push({ chatId, description: desc });
+      }
     }
 
-    if (!tgResp.ok || !tgJson || tgJson.ok !== true) {
-      const desc = tgJson && tgJson.description ? String(tgJson.description) : `HTTP ${tgResp.status}`;
-      return json({ ok: false, error: "telegram_failed", description: desc }, 502, request);
+    if (errors.length) {
+      return json({ ok: false, error: "telegram_failed", errors }, 502, request);
     }
 
-    return json({ ok: true }, 200, request);
+    return json({ ok: true, sent: chatIds.length }, 200, request);
   }
 };
+
+function parseChatIds(env) {
+  const rawList = (env.TELEGRAM_CHAT_IDS || "").trim();
+  if (rawList) {
+    // Allow comma/space/newline separated list.
+    const parts = rawList.split(/[\s,]+/g).map(s => s.trim()).filter(Boolean);
+    // Keep only numbers with optional leading "-" (groups/supergroups).
+    const filtered = parts.filter(s => /^-?\d+$/.test(s));
+    // De-duplicate.
+    return Array.from(new Set(filtered));
+  }
+
+  const single = (env.TELEGRAM_CHAT_ID || "").trim();
+  if (!single) return [];
+  return /^-?\d+$/.test(single) ? [single] : [];
+}
 
 function corsHeaders(request) {
   const origin = request.headers.get("origin") || "*";

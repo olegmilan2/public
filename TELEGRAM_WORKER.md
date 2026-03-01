@@ -12,7 +12,8 @@ Firebase Cloud Functions сейчас требуют Blaze, поэтому дл�
 
 3) Задать секреты (1 раз)
 - `wrangler secret put TELEGRAM_BOT_TOKEN` (вставь token бота)
-- `wrangler secret put TELEGRAM_CHAT_ID` (вставь chat_id)
+- `wrangler secret put TELEGRAM_CHAT_IDS` (вставь chat_id через запятую: `88590436,12345678`)
+  Если нужно только в один чат, можно использовать `wrangler secret put TELEGRAM_CHAT_ID`
 - (опционально) `wrangler secret put STOPLIST_API_KEY` (если хочешь защиту ключом)
 
 4) Получить URL воркера
