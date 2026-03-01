@@ -1,0 +1,9 @@
+name = "stoplist-telegram-proxy"
+main = "index.mjs"
+compatibility_date = "2025-01-01"
+
+# After first deploy, set secrets:
+# - TELEGRAM_BOT_TOKEN
+# - TELEGRAM_CHAT_ID
+# Optional:
+# - STOPLIST_API_KEY (if set, clients must send header x-stoplist-key)

@@ -27,12 +27,14 @@ const IOS_INSTALL_DISMISSED_KEY = "iphone_install_prompt_dismissed";
 const ANDROID_INSTALL_DISMISSED_KEY = "android_install_prompt_dismissed";
 const NEW_ITEM_NOTIFICATIONS_KEY = "new_item_notifications_enabled";
 const TG_ENABLED_KEY = "tg_notifications_enabled";
-const TG_TOKEN_KEY = "tg_bot_token";
-const TG_CHAT_ID_KEY = "tg_chat_id";
 const SETTINGS_LOCK_ENABLED_KEY = "settings_lock_enabled";
 const SETTINGS_LOCK_PASSWORD_KEY = "settings_lock_password";
 const SETTINGS_UNLOCKED_SESSION_KEY = "settings_unlocked_session";
 const FCM_VAPID_KEY = "BJZ5GUE1xVHehU4Mx1e9XX-6GFtFK7YL1i52rtA80ki-fW0KCslTcWS3hxj_mIci0L1fnQH_ykENBMSznD4LGE4";
+
+// Cloudflare Worker URL (see TELEGRAM_WORKER.md). Must end with "/send".
+// Example: "https://stoplist-telegram-proxy.<user>.workers.dev/send"
+const TELEGRAM_PROXY_URL = "https://stoplist-telegram-proxy.check-c1174-stoplist.workers.dev/send";
 let currentUser = requestUserNameOnStart();
 let deferredInstallPrompt = null;
 
@@ -272,40 +274,22 @@ function getSectionName(secKey){
   return sec ? sec.name : secKey;
 }
 
-function getTelegramConfig(){
-  const enabled = storageGet(TG_ENABLED_KEY) === "1";
-  const token = (storageGet(TG_TOKEN_KEY) || "").trim();
-  const chatId = (storageGet(TG_CHAT_ID_KEY) || "").trim();
-  return { enabled, token, chatId };
-}
+let telegramEnabled = false;
+let telegramEnabledLoaded = false;
 
-function canSendTelegram(){
-  const cfg = getTelegramConfig();
-  return cfg.enabled && !!cfg.token && !!cfg.chatId;
-}
-
-function sendTelegramMessage(text, parseMode){
-  const { token, chatId } = getTelegramConfig();
-  if(!token || !chatId) return;
+async function sendTelegramViaProxy(text, parseMode){
+  if(!TELEGRAM_PROXY_URL) return false;
   const message = String(text || "").trim();
-  if(!message) return;
-
-  // Telegram Bot API doesn't reliably support CORS for browsers.
-  // Use a fire-and-forget GET request via Image to avoid CORS reads.
-  // NOTE: token must NOT be URL-encoded in the path (":" is part of the token format).
-  const tokenPath = token.replace(/\s+/g, "");
-  const url =
-    `https://api.telegram.org/bot${tokenPath}/sendMessage` +
-    `?chat_id=${encodeURIComponent(chatId)}` +
-    `&text=${encodeURIComponent(message)}` +
-    (parseMode ? `&parse_mode=${encodeURIComponent(String(parseMode))}` : "") +
-    `&disable_web_page_preview=1`;
+  if(!message) return false;
   try {
-    const img = new Image();
-    img.referrerPolicy = "no-referrer";
-    img.src = url;
+    const resp = await fetch(TELEGRAM_PROXY_URL, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ text: message, parseMode: parseMode ? String(parseMode) : "HTML" })
+    });
+    return resp.ok;
   } catch (e) {
-    // ignore send errors
+    return false;
   }
 }
 
@@ -313,68 +297,84 @@ function syncTelegramUi(){
   const toggle = document.getElementById("toggle-tg");
   const status = document.getElementById("tg-status");
   const hint = document.getElementById("tg-hint");
-  const tokenEl = document.getElementById("tg-token");
-  const chatIdEl = document.getElementById("tg-chatid");
   const testBtn = document.getElementById("tg-test");
-  if(!toggle && !status && !hint && !tokenEl && !chatIdEl && !testBtn) return;
+  if(!toggle && !status && !hint && !testBtn) return;
 
-  const cfg = getTelegramConfig();
-  const enabled = cfg.enabled;
-  const ready = canSendTelegram();
+  const enabled = !!telegramEnabled;
 
   if(toggle){
     toggle.setAttribute("aria-checked", enabled ? "true" : "false");
     toggle.setAttribute("aria-label", enabled ? "Отключить Telegram уведомления" : "Включить Telegram уведомления");
   }
 
-  if(tokenEl && tokenEl.value !== cfg.token) tokenEl.value = cfg.token;
-  if(chatIdEl && chatIdEl.value !== cfg.chatId) chatIdEl.value = cfg.chatId;
-
   if(testBtn){
-    testBtn.disabled = !ready;
+    testBtn.disabled = !enabled;
   }
 
   if(status){
-    status.textContent = `Статус: ${enabled ? "включено" : "выключено"} • ${ready ? "готово" : "нужны token/chatId"}`;
+    status.textContent = telegramEnabledLoaded
+      ? `Статус: ${enabled ? "включено" : "выключено"} • отправка через proxy`
+      : "Статус: …";
   }
 
   if(hint){
     hint.textContent = enabled
       ? "Сообщение улетает в Telegram при добавлении новой позиции."
-      : "Включи и заполни token + chatId. Важно: токен в браузере виден пользователю этого устройства.";
+      : "Включи, чтобы приходило в Telegram.";
   }
 }
 
 function initTelegramSettings(){
   const toggle = document.getElementById("toggle-tg");
-  const tokenEl = document.getElementById("tg-token");
-  const chatIdEl = document.getElementById("tg-chatid");
   const testBtn = document.getElementById("tg-test");
-  if(!toggle || !tokenEl || !chatIdEl || !testBtn) return;
+  if(!toggle || !testBtn) return;
 
-  // Ensure defaults exist so UI is stable.
+  // Keep legacy local preference only as a fallback (if DB read fails).
   const savedEnabled = storageGet(TG_ENABLED_KEY);
-  if(savedEnabled !== "1" && savedEnabled !== "0") storageSet(TG_ENABLED_KEY, "0");
+  if(savedEnabled === "1") telegramEnabled = true;
 
-  tokenEl.addEventListener("input", () => {
-    storageSet(TG_TOKEN_KEY, String(tokenEl.value || "").trim());
+  const enabledRef = db.ref("settings/telegram/enabled");
+  enabledRef.on("value", snap => {
+    const v = snap.val();
+    telegramEnabledLoaded = true;
+    telegramEnabled = v === true || v === 1 || String(v || "").trim() === "1" || String(v || "").trim().toLowerCase() === "true";
     syncTelegramUi();
-  });
-  chatIdEl.addEventListener("input", () => {
-    storageSet(TG_CHAT_ID_KEY, String(chatIdEl.value || "").trim());
-    syncTelegramUi();
-  });
-
-  toggle.addEventListener("click", () => {
-    const enabled = storageGet(TG_ENABLED_KEY) === "1";
-    storageSet(TG_ENABLED_KEY, enabled ? "0" : "1");
+  }, () => {
+    // If the DB rules block reads, fallback to local toggle.
+    telegramEnabledLoaded = true;
     syncTelegramUi();
   });
 
-  testBtn.addEventListener("click", () => {
-    if(!canSendTelegram()) return;
-    sendTelegramMessage(`✅ <b>Тест</b>: Telegram уведомления работают\nПользователь: <b>${escapeHtml(currentUser)}</b>`, "HTML");
-    alert("Тест отправлен в Telegram (если token/chatId верные).");
+  toggle.addEventListener("click", async () => {
+    if(!verifySettingsPasswordOncePerSession()) return;
+    const next = !telegramEnabled;
+    // Persist global setting (syncs across devices).
+    try {
+      await enabledRef.set(next);
+      storageSet(TG_ENABLED_KEY, next ? "1" : "0");
+    } catch (e) {
+      // If blocked by rules, fallback to local toggle.
+      telegramEnabled = next;
+      storageSet(TG_ENABLED_KEY, next ? "1" : "0");
+      syncTelegramUi();
+      alert("Не удалось сохранить в базе. Включено только на этом устройстве.");
+    }
+  });
+
+  testBtn.addEventListener("click", async () => {
+    if(!verifySettingsPasswordOncePerSession()) return;
+    if(!telegramEnabled) return;
+    try {
+      const ok = await sendTelegramViaProxy(`✅ <b>Тест</b>: Telegram уведомления работают\nПользователь: <b>${escapeHtml(currentUser)}</b>`, "HTML");
+      if(!ok){
+        alert("Не удалось отправить тест. Проверь TELEGRAM_PROXY_URL и воркер.");
+        return;
+      }
+      alert("Тест отправлен. Проверьте Telegram.");
+    } catch (e) {
+      console.error("Telegram test request failed:", e);
+      alert("Не удалось отправить тест-запрос. Проверьте интернет/правила Firebase.");
+    }
   });
 
   syncTelegramUi();
@@ -1703,7 +1703,7 @@ async function addItem(secKey){
       ...actorMeta(),
       type:type
     });
-    if(canSendTelegram()){
+    if(telegramEnabled){
       const safeUser = escapeHtml(currentUser);
       const safeSection = escapeHtml(getSectionName(secKey));
       const safeName = escapeHtml(name);
@@ -1712,7 +1712,8 @@ async function addItem(secKey){
         `📦 Секция: <b>${safeSection}</b>\n` +
         `❌ Позиция: <b>${safeName}</b>\n` +
         `👤 Кто: <b>${safeUser}</b>`;
-      sendTelegramMessage(message, "HTML");
+      // Fire-and-forget; UI should not block on Telegram.
+      sendTelegramViaProxy(message, "HTML");
     }
     try {
       await incrementRatingOnAdd(secKey, name);
