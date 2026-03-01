@@ -1510,8 +1510,8 @@ textarea::placeholder {
 /* Mobile ergonomics: larger tap targets for "add item" form. */
 @media (hover: none) and (pointer: coarse) {
   .add-form {
-    padding: 10px;
-    border-radius: 12px;
+    padding: 8px;
+    border-radius: 10px;
   }
 
   .form-grid {
@@ -1520,18 +1520,18 @@ textarea::placeholder {
 
   .add-form input,
   .add-form select {
-    height: 50px; /* ~50-55px is a comfortable tap target */
-    padding: 12px 12px;
-    border-radius: 12px;
-    font-size: 17px; /* avoids iOS Safari auto-zoom on focus */
+    height: 46px;
+    padding: 10px 12px;
+    border-radius: 10px;
+    font-size: 16px; /* avoids iOS Safari auto-zoom on focus */
     line-height: 1.2;
   }
 
   .btn-add {
-    min-height: 50px;
-    padding: 12px 14px;
-    border-radius: 12px;
-    font-size: 17px;
+    min-height: 46px;
+    padding: 10px 14px;
+    border-radius: 10px;
+    font-size: 16px;
     font-weight: 800;
     letter-spacing: 0.01em;
   }
